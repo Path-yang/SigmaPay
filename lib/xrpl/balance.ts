@@ -33,8 +33,9 @@ export async function getBalances(address: string): Promise<Balances> {
             peer: RLUSD_ISSUER,
         });
 
+        // Currency might come back as hex or as readable string
         const rlusdLine = accountLines.result.lines.find(
-            (line) => line.currency === RLUSD_CURRENCY
+            (line) => line.currency === RLUSD_CURRENCY || line.currency === "RLUSD"
         );
 
         if (rlusdLine) {

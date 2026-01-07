@@ -55,8 +55,10 @@ export async function getTransactionHistory(address: string): Promise<Transactio
             } else if (amount && typeof amount === "object") {
                 amountValue = amount.value;
                 currency = amount.currency;
-                // Only include RLUSD transactions or XRP
-                if (currency !== RLUSD_CURRENCY && currency !== "XRP") continue;
+                // Only include RLUSD transactions or XRP (check both hex and readable formats)
+                if (currency !== RLUSD_CURRENCY && currency !== "RLUSD" && currency !== "XRP") continue;
+                // Normalize currency name for display
+                if (currency === RLUSD_CURRENCY) currency = "RLUSD";
             }
 
             // Extract memo

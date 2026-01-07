@@ -79,8 +79,9 @@ export async function checkTrustlineExists(address: string): Promise<boolean> {
       currency: string;
     }
 
+    // Check for both hex and readable currency formats
     return response.result.lines.some(
-      (line: TrustLine) => line.currency === RLUSD_CURRENCY
+      (line: TrustLine) => line.currency === RLUSD_CURRENCY || line.currency === "RLUSD"
     );
   } catch {
     return false;

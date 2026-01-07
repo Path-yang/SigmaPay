@@ -106,7 +106,8 @@ export async function getIncomingChecks(address: string): Promise<CheckInfo[]> {
       if (checkObj.Destination !== address) continue;
       
       const sendMax = checkObj.SendMax;
-      const isRLUSD = typeof sendMax === "object" && sendMax.currency === RLUSD_CURRENCY;
+      // Check for both hex and readable currency formats
+      const isRLUSD = typeof sendMax === "object" && (sendMax.currency === RLUSD_CURRENCY || sendMax.currency === "RLUSD");
 
       checks.push({
         index: checkObj.index,

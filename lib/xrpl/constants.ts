@@ -4,7 +4,10 @@ export const XRPL_TESTNET_FAUCET = "https://faucet.altnet.rippletest.net/account
 
 // RLUSD on Testnet
 export const RLUSD_ISSUER = "rQhWct2fTR6gPgmc8sLMdM6U8Lwrjvzzyj";
-export const RLUSD_CURRENCY = "RLUSD";
+// XRPL requires non-3-char currencies to be 40-char hex
+// "RLUSD" encoded as hex, padded to 40 chars
+export const RLUSD_CURRENCY = "524C555344000000000000000000000000000000"; // "RLUSD" in hex
+export const RLUSD_CURRENCY_DISPLAY = "RLUSD"; // Human-readable name
 
 // Explorer URLs
 export const EXPLORER_BASE_URL = "https://testnet.xrpl.org";
