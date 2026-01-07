@@ -2,9 +2,10 @@
 const nextConfig = {
     // Turbopack config (Next.js 16+ uses Turbopack by default)
     turbopack: {
-        // Turbopack doesn't need webpack fallbacks - it handles node built-ins differently
+        // Set the root directory to silence the lockfile warning
+        root: __dirname,
     },
-    // Keep webpack config for production builds
+    // Webpack configuration for production builds and XRPL dependencies
     webpack: (config, { isServer }) => {
         // Handle XRPL's node.js dependencies for client-side
         if (!isServer) {
@@ -24,6 +25,10 @@ const nextConfig = {
     experimental: {
         optimizePackageImports: ['lucide-react'],
     },
+    // Ensure trailing slashes are handled consistently
+    trailingSlash: false,
+    // Enable React strict mode for better development experience
+    reactStrictMode: true,
 };
 
 module.exports = nextConfig;
