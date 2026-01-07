@@ -11,12 +11,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SigmaPay - Cross-Border Payments Made Simple",
-  description: "Send money home instantly with near-zero fees using RLUSD on the XRP Ledger. Fast, secure, and global cross-border remittance.",
-  keywords: ["remittance", "XRPL", "RLUSD", "cross-border", "payment", "crypto", "stablecoin", "SigmaPay"],
-  authors: [{ name: "SigmaPay Team" }],
+  title: "RemitGift - Cross-Border Payments Made Simple",
+  description: "Send money home instantly with near-zero fees using RLUSD on the XRP Ledger. Fast, secure, and verified cross-border remittance.",
+  keywords: ["remittance", "XRPL", "RLUSD", "cross-border", "payment", "crypto", "stablecoin", "RemitGift", "DID", "verification"],
+  authors: [{ name: "RemitGift Team" }],
   openGraph: {
-    title: "SigmaPay - Cross-Border Payments Made Simple",
+    title: "RemitGift - Cross-Border Payments Made Simple",
     description: "Send money home instantly with near-zero fees using RLUSD on the XRP Ledger.",
     type: "website",
   },
@@ -32,7 +32,7 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans antialiased`}>
         <WalletProvider>
           <Navbar />
-          <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+          <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/30">
             {children}
           </main>
           <Toaster />

@@ -1,6 +1,8 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowRight, Zap, Shield, Globe } from "lucide-react";
+import { ArrowRight, Zap, Shield, Globe, ShieldCheck, DollarSign } from "lucide-react";
 
 export function Hero() {
     return (
@@ -23,6 +25,9 @@ export function Hero() {
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-slate-200/50 rounded-full text-sm font-medium text-slate-600 mb-8 shadow-lg shadow-slate-200/50">
                     <Zap className="w-4 h-4 text-indigo-600" />
                     Powered by XRP Ledger
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded-full ml-2">
+                        + DID Verification
+                    </span>
                 </div>
 
                 {/* Main heading */}
@@ -30,18 +35,18 @@ export function Hero() {
                     Send money home
                     <br />
                     <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                        instantly
+                        instantly & verified
                     </span>
                 </h1>
 
                 {/* Subheading */}
                 <p className="text-xl md:text-2xl text-slate-600 mb-10 max-w-2xl mx-auto leading-relaxed">
-                    Cross-border payments made simple. Send RLUSD to anyone anywhere in the world with zero hidden fees.
+                    Cross-border remittance made simple. Send RLUSD anywhere with near-zero fees and on-chain identity verification.
                 </p>
 
                 {/* CTA Buttons */}
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-                    <Link href="/dashboard">
+                    <Link href="/onboarding">
                         <Button size="lg" className="text-lg px-8 h-14 shadow-xl shadow-indigo-500/25">
                             Get Started
                             <ArrowRight className="w-5 h-5 ml-2" />
@@ -54,25 +59,51 @@ export function Hero() {
                     </Link>
                 </div>
 
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto mb-12">
+                    <div className="p-4 bg-white/70 backdrop-blur rounded-xl border border-slate-200/50">
+                        <p className="text-2xl font-bold text-slate-900">3-5s</p>
+                        <p className="text-sm text-slate-500">Settlement</p>
+                    </div>
+                    <div className="p-4 bg-white/70 backdrop-blur rounded-xl border border-slate-200/50">
+                        <p className="text-2xl font-bold text-slate-900">&lt;$0.01</p>
+                        <p className="text-sm text-slate-500">Per Transfer</p>
+                    </div>
+                    <div className="p-4 bg-white/70 backdrop-blur rounded-xl border border-slate-200/50">
+                        <p className="text-2xl font-bold text-slate-900">24/7</p>
+                        <p className="text-sm text-slate-500">Available</p>
+                    </div>
+                </div>
+
                 {/* Feature cards */}
-                <div className="grid md:grid-cols-3 gap-6 mt-12">
+                <div className="grid md:grid-cols-4 gap-6 mt-12">
                     <div className="p-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-slate-200/50 shadow-xl shadow-slate-200/30 hover:shadow-2xl transition-shadow">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 mx-auto">
                             <Zap className="w-6 h-6 text-white" />
                         </div>
                         <h3 className="text-lg font-semibold text-slate-900 mb-2">Instant Transfers</h3>
-                        <p className="text-slate-500">
-                            Transactions settle in 3-5 seconds on the XRP Ledger. No more waiting days.
+                        <p className="text-slate-500 text-sm">
+                            3-5 second settlement on XRPL
                         </p>
                     </div>
 
                     <div className="p-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-slate-200/50 shadow-xl shadow-slate-200/30 hover:shadow-2xl transition-shadow">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-4 mx-auto">
-                            <Shield className="w-6 h-6 text-white" />
+                            <DollarSign className="w-6 h-6 text-white" />
                         </div>
-                        <h3 className="text-lg font-semibold text-slate-900 mb-2">Near-Zero Fees</h3>
-                        <p className="text-slate-500">
-                            Pay less than $0.01 per transaction. Keep more of what you send.
+                        <h3 className="text-lg font-semibold text-slate-900 mb-2">RLUSD Stablecoin</h3>
+                        <p className="text-slate-500 text-sm">
+                            USD-backed, no volatility
+                        </p>
+                    </div>
+
+                    <div className="p-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-slate-200/50 shadow-xl shadow-slate-200/30 hover:shadow-2xl transition-shadow">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center mb-4 mx-auto">
+                            <ShieldCheck className="w-6 h-6 text-white" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-slate-900 mb-2">DID Verified</h3>
+                        <p className="text-slate-500 text-sm">
+                            On-chain identity for trust
                         </p>
                     </div>
 
@@ -81,8 +112,8 @@ export function Hero() {
                             <Globe className="w-6 h-6 text-white" />
                         </div>
                         <h3 className="text-lg font-semibold text-slate-900 mb-2">Global Reach</h3>
-                        <p className="text-slate-500">
-                            Send RLUSD to anyone, anywhere. No borders, no restrictions.
+                        <p className="text-slate-500 text-sm">
+                            Send anywhere, no borders
                         </p>
                     </div>
                 </div>

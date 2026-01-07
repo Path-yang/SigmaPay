@@ -7,6 +7,8 @@ import { generateWallet, importWallet, getWalletFromSeed, fundExistingWallet } f
 import { getBalances, isAccountFunded } from "@/lib/xrpl/balance";
 import { createRLUSDTrustline, checkTrustlineExists } from "@/lib/xrpl/trustline";
 import { getClient, disconnectClient } from "@/lib/xrpl/client";
+import { getDID, createDID, updateVerificationLevel, RemitGiftDID } from "@/lib/xrpl/did";
+import { VerificationLevel, LIMITS } from "@/lib/xrpl/constants";
 import type { Balances } from "@/lib/xrpl/balance";
 
 interface WalletContextType {
@@ -19,6 +21,14 @@ interface WalletContextType {
     isFunded: boolean;
     error: string | null;
     hasWallet: boolean;
+    
+    // DID related
+    did: RemitGiftDID | null;
+    verificationLevel: VerificationLevel;
+    sendLimit: number;
+    isVerified: boolean;
+    isFullyVerified: boolean;
+    hasDID: boolean;
 
     // Actions
     createWallet: (password: string) => Promise<{ seed: string; address: string }>;
@@ -29,6 +39,11 @@ interface WalletContextType {
     refreshBalances: () => Promise<void>;
     fundWallet: () => Promise<boolean>;
     setupTrustline: () => Promise<boolean>;
+    
+    // DID Actions
+    initializeDID: () => Promise<boolean>;
+    verifyIdentity: (level: VerificationLevel, data?: { name?: string; email?: string; phone?: string }) => Promise<boolean>;
+    refreshDID: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -43,6 +58,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     const [isFunded, setIsFunded] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasWallet, setHasWallet] = useState(false);
+    
+    // DID state
+    const [did, setDID] = useState<RemitGiftDID | null>(null);
 
     // Check for stored wallet on mount
     useEffect(() => {
@@ -54,6 +72,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false);
     }, []);
 
+    // Refresh DID when address changes
+    const refreshDID = useCallback(async () => {
+        if (!address) {
+            setDID(null);
+            return;
+        }
+        try {
+            const didData = await getDID(address);
+            setDID(didData);
+        } catch (err) {
+            console.error("Failed to fetch DID:", err);
+        }
+    }, [address]);
+
     // Connect to XRPL and refresh data when wallet is unlocked
     useEffect(() => {
         if (wallet) {
@@ -62,6 +94,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                     await getClient();
                     setIsConnected(true);
                     await refreshBalances();
+                    await refreshDID();
                 } catch (err) {
                     console.error("Failed to connect:", err);
                     setError("Failed to connect to XRPL network");
@@ -75,7 +108,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                 disconnectClient();
             }
         };
-    }, [wallet]);
+    }, [wallet, refreshDID]);
 
     const refreshBalances = useCallback(async () => {
         if (!address) return;
@@ -109,7 +142,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         }
     }, [address]);
 
-    const createWallet = async (password: string): Promise<{ seed: string; address: string }> => {
+    const createWalletAction = async (password: string): Promise<{ seed: string; address: string }> => {
         try {
             setIsLoading(true);
             const { address: newAddress, seed, publicKey } = generateWallet();
@@ -191,6 +224,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setHasWallet(false);
         setHasTrustline(false);
         setIsFunded(false);
+        setDID(null);
         disconnectClient();
     };
 
@@ -241,6 +275,61 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    // DID Actions
+    const initializeDID = async (): Promise<boolean> => {
+        if (!wallet) return false;
+
+        try {
+            setIsLoading(true);
+            const result = await createDID(wallet, {
+                verificationLevel: VerificationLevel.UNVERIFIED,
+            });
+
+            if (result.success) {
+                await refreshDID();
+                return true;
+            } else {
+                setError(result.error || "Failed to initialize DID");
+                return false;
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Failed to initialize DID";
+            setError(message);
+            return false;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const verifyIdentity = async (
+        level: VerificationLevel,
+        data?: { name?: string; email?: string; phone?: string }
+    ): Promise<boolean> => {
+        if (!wallet) return false;
+
+        try {
+            setIsLoading(true);
+            const result = await updateVerificationLevel(wallet, level, data);
+
+            if (result.success) {
+                await refreshDID();
+                return true;
+            } else {
+                setError(result.error || "Failed to verify identity");
+                return false;
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Failed to verify identity";
+            setError(message);
+            return false;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const verificationLevel = did?.verificationLevel || VerificationLevel.UNVERIFIED;
+    const sendLimit = LIMITS[verificationLevel];
+
     return (
         <WalletContext.Provider
             value={{
@@ -253,7 +342,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                 isFunded,
                 error,
                 hasWallet,
-                createWallet,
+                
+                // DID
+                did,
+                verificationLevel,
+                sendLimit,
+                isVerified: verificationLevel !== VerificationLevel.UNVERIFIED,
+                isFullyVerified: verificationLevel === VerificationLevel.VERIFIED,
+                hasDID: did !== null,
+                
+                // Actions
+                createWallet: createWalletAction,
                 importWalletFromSeed,
                 unlockWallet,
                 lockWallet,
@@ -261,6 +360,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                 refreshBalances,
                 fundWallet,
                 setupTrustline,
+                
+                // DID Actions
+                initializeDID,
+                verifyIdentity,
+                refreshDID,
             }}
         >
             {children}

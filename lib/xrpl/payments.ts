@@ -1,123 +1,120 @@
-import { Payment, Wallet, xrpToDrops } from "xrpl";
+import { Payment } from "xrpl";
 import { getClient } from "./client";
 import { RLUSD_ISSUER, RLUSD_CURRENCY } from "./constants";
+import { canSendAmount } from "./did";
+import type { Wallet } from "xrpl";
 
 export interface SendPaymentParams {
-    wallet: Wallet;
-    destination: string;
-    amount: string; // RLUSD amount
-    memo?: string;
+  wallet: Wallet;
+  destination: string;
+  amount: string;
+  memo?: string;
 }
 
 export interface PaymentResult {
-    success: boolean;
-    hash?: string;
-    error?: string;
+  success: boolean;
+  method: "direct" | "check";
+  hash?: string;
+  error?: string;
 }
 
+/**
+ * Send RLUSD payment directly
+ */
 export async function sendRLUSDPayment({
-    wallet,
-    destination,
-    amount,
-    memo,
-}: SendPaymentParams): Promise<PaymentResult> {
-    try {
-        const client = await getClient();
+  wallet,
+  destination,
+  amount,
+  memo,
+}: SendPaymentParams): Promise<{ success: boolean; hash?: string; error?: string }> {
+  try {
+    const client = await getClient();
 
-        const payment: Payment = {
-            TransactionType: "Payment",
-            Account: wallet.classicAddress,
-            Destination: destination,
-            Amount: {
-                currency: RLUSD_CURRENCY,
-                issuer: RLUSD_ISSUER,
-                value: amount,
-            },
-        };
+    const payment: Payment = {
+      TransactionType: "Payment",
+      Account: wallet.classicAddress,
+      Destination: destination,
+      Amount: {
+        currency: RLUSD_CURRENCY,
+        issuer: RLUSD_ISSUER,
+        value: amount,
+      },
+    };
 
-        // Add memo if provided
-        if (memo) {
-            payment.Memos = [
-                {
-                    Memo: {
-                        MemoType: Buffer.from("gift_message", "utf8")
-                            .toString("hex")
-                            .toUpperCase(),
-                        MemoData: Buffer.from(memo, "utf8").toString("hex").toUpperCase(),
-                    },
-                },
-            ];
-        }
-
-        const prepared = await client.autofill(payment);
-        const signed = wallet.sign(prepared);
-        const result = await client.submitAndWait(signed.tx_blob);
-
-        const meta = result.result.meta;
-        const txResult = typeof meta === "object" && meta !== null && "TransactionResult" in meta
-            ? (meta as { TransactionResult: string }).TransactionResult
-            : "";
-
-        if (txResult === "tesSUCCESS") {
-            return {
-                success: true,
-                hash: result.result.hash,
-            };
-        } else {
-            return {
-                success: false,
-                error: `Transaction failed: ${txResult}`,
-            };
-        }
-    } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Failed to send payment";
-        return {
-            success: false,
-            error: message,
-        };
+    if (memo) {
+      payment.Memos = [
+        {
+          Memo: {
+            MemoType: Buffer.from("gift_message", "utf8").toString("hex").toUpperCase(),
+            MemoData: Buffer.from(memo, "utf8").toString("hex").toUpperCase(),
+          },
+        },
+      ];
     }
+
+    const prepared = await client.autofill(payment);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
+
+    const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
+
+    if (txResult.meta?.TransactionResult === "tesSUCCESS") {
+      return {
+        success: true,
+        hash: txResult.hash,
+      };
+    }
+
+    return {
+      success: false,
+      error: txResult.meta?.TransactionResult || "Payment failed",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send payment",
+    };
+  }
 }
 
-export async function sendXRPPayment(
-    wallet: Wallet,
-    destination: string,
-    amount: string // XRP amount
-): Promise<PaymentResult> {
-    try {
-        const client = await getClient();
+/**
+ * Smart send - automatically chooses direct or check based on verification
+ */
+export async function smartSend({
+  wallet,
+  destination,
+  amount,
+  memo,
+}: SendPaymentParams): Promise<PaymentResult> {
+  const numAmount = parseFloat(amount);
+  const { allowed, useCheck } = await canSendAmount(wallet.classicAddress, numAmount);
 
-        const payment: Payment = {
-            TransactionType: "Payment",
-            Account: wallet.classicAddress,
-            Destination: destination,
-            Amount: xrpToDrops(amount),
-        };
+  if (!allowed) {
+    return {
+      success: false,
+      method: "direct",
+      error: "Amount exceeds your verification limit",
+    };
+  }
 
-        const prepared = await client.autofill(payment);
-        const signed = wallet.sign(prepared);
-        const result = await client.submitAndWait(signed.tx_blob);
-
-        const meta = result.result.meta;
-        const txResult = typeof meta === "object" && meta !== null && "TransactionResult" in meta
-            ? (meta as { TransactionResult: string }).TransactionResult
-            : "";
-
-        if (txResult === "tesSUCCESS") {
-            return {
-                success: true,
-                hash: result.result.hash,
-            };
-        } else {
-            return {
-                success: false,
-                error: `Transaction failed: ${txResult}`,
-            };
-        }
-    } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Failed to send XRP";
-        return {
-            success: false,
-            error: message,
-        };
-    }
+  if (useCheck) {
+    // Use check creation for unverified users
+    const { createRLUSDCheck } = await import("./checks");
+    const result = await createRLUSDCheck({ wallet, destination, amount, memo });
+    return {
+      success: result.success,
+      method: "check",
+      hash: result.hash,
+      error: result.error,
+    };
+  } else {
+    // Direct payment for verified users
+    const result = await sendRLUSDPayment({ wallet, destination, amount, memo });
+    return {
+      success: result.success,
+      method: "direct",
+      hash: result.hash,
+      error: result.error,
+    };
+  }
 }

@@ -1,215 +1,171 @@
-import { CheckCreate, CheckCash, Wallet } from "xrpl";
+import { CheckCreate, CheckCash } from "xrpl";
 import { getClient } from "./client";
 import { RLUSD_ISSUER, RLUSD_CURRENCY } from "./constants";
+import type { Wallet } from "xrpl";
 
 export interface CreateCheckParams {
-    wallet: Wallet;
-    destination: string;
-    amount: string; // RLUSD amount
-    memo?: string;
+  wallet: Wallet;
+  destination: string;
+  amount: string;
+  memo?: string;
 }
 
-export interface CheckResult {
-    success: boolean;
-    hash?: string;
-    error?: string;
-}
-
-export interface CheckObject {
-    index: string;
-    Destination: string;
-    Account: string;
-    SendMax: {
-        currency: string;
-        issuer: string;
-        value: string;
-    } | string;
-    Memos?: Array<{
-        Memo: {
-            MemoType?: string;
-            MemoData?: string;
-        };
-    }>;
+export interface CheckInfo {
+  index: string;
+  sender: string;
+  destination: string;
+  amount: string;
+  currency: string;
+  memo?: string;
+  expiration?: number;
+  sequence: number;
 }
 
 export async function createRLUSDCheck({
-    wallet,
-    destination,
-    amount,
-    memo,
-}: CreateCheckParams): Promise<CheckResult> {
-    try {
-        const client = await getClient();
+  wallet,
+  destination,
+  amount,
+  memo,
+}: CreateCheckParams): Promise<{ success: boolean; hash?: string; error?: string }> {
+  try {
+    const client = await getClient();
 
-        const checkCreate: CheckCreate = {
-            TransactionType: "CheckCreate",
-            Account: wallet.classicAddress,
-            Destination: destination,
-            SendMax: {
-                currency: RLUSD_CURRENCY,
-                issuer: RLUSD_ISSUER,
-                value: amount,
-            },
-        };
+    const checkCreate: CheckCreate = {
+      TransactionType: "CheckCreate",
+      Account: wallet.classicAddress,
+      Destination: destination,
+      SendMax: {
+        currency: RLUSD_CURRENCY,
+        issuer: RLUSD_ISSUER,
+        value: amount,
+      },
+    };
 
-        if (memo) {
-            checkCreate.Memos = [
-                {
-                    Memo: {
-                        MemoType: Buffer.from("gift_message", "utf8")
-                            .toString("hex")
-                            .toUpperCase(),
-                        MemoData: Buffer.from(memo, "utf8").toString("hex").toUpperCase(),
-                    },
-                },
-            ];
-        }
-
-        const prepared = await client.autofill(checkCreate);
-        const signed = wallet.sign(prepared);
-        const result = await client.submitAndWait(signed.tx_blob);
-
-        const meta = result.result.meta;
-        const txResult = typeof meta === "object" && meta !== null && "TransactionResult" in meta
-            ? (meta as { TransactionResult: string }).TransactionResult
-            : "";
-
-        if (txResult === "tesSUCCESS") {
-            return {
-                success: true,
-                hash: result.result.hash,
-            };
-        } else {
-            return {
-                success: false,
-                error: `Check creation failed: ${txResult}`,
-            };
-        }
-    } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Failed to create check";
-        return {
-            success: false,
-            error: message,
-        };
+    if (memo) {
+      checkCreate.Memos = [
+        {
+          Memo: {
+            MemoType: Buffer.from("gift_message", "utf8").toString("hex").toUpperCase(),
+            MemoData: Buffer.from(memo, "utf8").toString("hex").toUpperCase(),
+          },
+        },
+      ];
     }
+
+    const prepared = await client.autofill(checkCreate);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
+
+    const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
+
+    if (txResult.meta?.TransactionResult === "tesSUCCESS") {
+      return {
+        success: true,
+        hash: txResult.hash,
+      };
+    }
+
+    return {
+      success: false,
+      error: txResult.meta?.TransactionResult || "Check creation failed",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to create check",
+    };
+  }
 }
 
-export async function getIncomingChecks(address: string): Promise<CheckObject[]> {
-    try {
-        const client = await getClient();
+export async function getIncomingChecks(address: string): Promise<CheckInfo[]> {
+  try {
+    const client = await getClient();
 
-        const response = await client.request({
-            command: "account_objects",
-            account: address,
-            type: "check",
-        });
+    const response = await client.request({
+      command: "account_objects",
+      account: address,
+      type: "check",
+    });
 
-        // Filter for checks where this address is the destination
-        const checks = response.result.account_objects
-            .filter((obj) =>
-                obj.LedgerEntryType === "Check" &&
-                "Destination" in obj &&
-                (obj as unknown as CheckObject).Destination === address
-            )
-            .map((obj) => ({
-                index: obj.index,
-                Destination: (obj as unknown as CheckObject).Destination,
-                Account: (obj as unknown as CheckObject).Account,
-                SendMax: (obj as unknown as CheckObject).SendMax,
-                Memos: (obj as unknown as CheckObject).Memos,
-            }));
+    const checks: CheckInfo[] = [];
+    
+    for (const obj of response.result.account_objects) {
+      // Type guard to check if this is a Check object
+      if (obj.LedgerEntryType !== "Check") continue;
+      
+      const checkObj = obj as {
+        LedgerEntryType: string;
+        Destination: string;
+        Account: string;
+        SendMax: string | { currency: string; value: string; issuer: string };
+        index: string;
+        Expiration?: number;
+        Sequence: number;
+      };
+      
+      if (checkObj.Destination !== address) continue;
+      
+      const sendMax = checkObj.SendMax;
+      const isRLUSD = typeof sendMax === "object" && sendMax.currency === RLUSD_CURRENCY;
 
-        return checks;
-    } catch {
-        return [];
+      checks.push({
+        index: checkObj.index,
+        sender: checkObj.Account,
+        destination: checkObj.Destination,
+        amount: typeof sendMax === "object" ? sendMax.value : "0",
+        currency: isRLUSD ? "RLUSD" : "XRP",
+        expiration: checkObj.Expiration,
+        sequence: checkObj.Sequence,
+      });
     }
-}
 
-export async function getOutgoingChecks(address: string): Promise<CheckObject[]> {
-    try {
-        const client = await getClient();
-
-        const response = await client.request({
-            command: "account_objects",
-            account: address,
-            type: "check",
-        });
-
-        // Filter for checks where this address is the sender
-        const checks = response.result.account_objects
-            .filter((obj) =>
-                obj.LedgerEntryType === "Check" &&
-                "Account" in obj &&
-                (obj as unknown as CheckObject).Account === address
-            )
-            .map((obj) => ({
-                index: obj.index,
-                Destination: (obj as unknown as CheckObject).Destination,
-                Account: (obj as unknown as CheckObject).Account,
-                SendMax: (obj as unknown as CheckObject).SendMax,
-                Memos: (obj as unknown as CheckObject).Memos,
-            }));
-
-        return checks;
-    } catch {
-        return [];
-    }
+    return checks;
+  } catch (error) {
+    console.error("Error fetching checks:", error);
+    return [];
+  }
 }
 
 export async function cashCheck(
-    wallet: Wallet,
-    checkId: string,
-    amount: string
-): Promise<CheckResult> {
-    try {
-        const client = await getClient();
+  wallet: Wallet,
+  checkId: string,
+  amount: string
+): Promise<{ success: boolean; hash?: string; error?: string }> {
+  try {
+    const client = await getClient();
 
-        const checkCash: CheckCash = {
-            TransactionType: "CheckCash",
-            Account: wallet.classicAddress,
-            CheckID: checkId,
-            Amount: {
-                currency: RLUSD_CURRENCY,
-                issuer: RLUSD_ISSUER,
-                value: amount,
-            },
-        };
+    const checkCash: CheckCash = {
+      TransactionType: "CheckCash",
+      Account: wallet.classicAddress,
+      CheckID: checkId,
+      Amount: {
+        currency: RLUSD_CURRENCY,
+        issuer: RLUSD_ISSUER,
+        value: amount,
+      },
+    };
 
-        const prepared = await client.autofill(checkCash);
-        const signed = wallet.sign(prepared);
-        const result = await client.submitAndWait(signed.tx_blob);
+    const prepared = await client.autofill(checkCash);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
 
-        const meta = result.result.meta;
-        const txResult = typeof meta === "object" && meta !== null && "TransactionResult" in meta
-            ? (meta as { TransactionResult: string }).TransactionResult
-            : "";
+    const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
 
-        if (txResult === "tesSUCCESS") {
-            return {
-                success: true,
-                hash: result.result.hash,
-            };
-        } else {
-            return {
-                success: false,
-                error: `Check cashing failed: ${txResult}`,
-            };
-        }
-    } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Failed to cash check";
-        return {
-            success: false,
-            error: message,
-        };
+    if (txResult.meta?.TransactionResult === "tesSUCCESS") {
+      return {
+        success: true,
+        hash: txResult.hash,
+      };
     }
-}
 
-// Helper to decode memo
-export function decodeMemo(memoData?: string): string {
-    if (!memoData) return "";
-    try {
-        return Buffer.from(memoData, "hex").toString("utf8");
-    } catch {
-        return "";
-    }
+    return {
+      success: false,
+      error: txResult.meta?.TransactionResult || "Check cash failed",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to cash check",
+    };
+  }
 }

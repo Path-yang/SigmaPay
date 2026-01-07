@@ -1,89 +1,53 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useWallet } from "@/components/wallet/WalletProvider";
-import { getIncomingChecks, cashCheck, decodeMemo, CheckObject } from "@/lib/xrpl/checks";
+import { getIncomingChecks, cashCheck, CheckInfo } from "@/lib/xrpl/checks";
 import { getWalletFromSeed } from "@/lib/xrpl/wallet";
-import { formatAddress, formatAmount } from "@/lib/utils/format";
+import { SenderTrustBadge } from "@/components/did/SenderTrustBadge";
+import { formatAmount, formatAddress } from "@/lib/utils/format";
 import { getExplorerTxLink } from "@/lib/xrpl/constants";
 import { toast } from "@/components/ui/use-toast";
-import {
-    Inbox,
-    Loader2,
-    CheckCircle2,
-    DollarSign,
-    User,
-    MessageSquare,
+import { 
+    Inbox, 
+    CheckCircle, 
+    Loader2, 
     ExternalLink,
-    RefreshCw
+    FileCheck,
+    Gift
 } from "lucide-react";
-import Link from "next/link";
-
-interface CheckDisplay {
-    index: string;
-    sender: string;
-    amount: string;
-    memo?: string;
-}
 
 export function ChecksList() {
-    const { address, wallet, hasTrustline, refreshBalances } = useWallet();
-
-    const [checks, setChecks] = useState<CheckDisplay[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const { wallet, address, refreshBalances } = useWallet();
+    const [checks, setChecks] = useState<CheckInfo[]>([]);
+    const [loading, setLoading] = useState(true);
     const [claimingId, setClaimingId] = useState<string | null>(null);
 
-    const loadChecks = useCallback(async () => {
+    const fetchChecks = async () => {
         if (!address) return;
 
-        setIsLoading(true);
+        setLoading(true);
         try {
             const incomingChecks = await getIncomingChecks(address);
-
-            const checkDisplays: CheckDisplay[] = incomingChecks.map((check: CheckObject) => {
-                let amount = "0";
-                if (typeof check.SendMax === "object" && check.SendMax.value) {
-                    amount = check.SendMax.value;
-                }
-
-                let memo: string | undefined;
-                if (check.Memos?.[0]?.Memo?.MemoData) {
-                    memo = decodeMemo(check.Memos[0].Memo.MemoData);
-                }
-
-                return {
-                    index: check.index,
-                    sender: check.Account,
-                    amount,
-                    memo,
-                };
-            });
-
-            setChecks(checkDisplays);
-        } catch (err) {
-            console.error("Failed to load checks:", err);
-            toast({
-                title: "Failed to load checks",
-                description: "Please try again",
-                variant: "destructive",
-            });
+            setChecks(incomingChecks);
+        } catch (error) {
+            console.error("Failed to fetch checks:", error);
         } finally {
-            setIsLoading(false);
+            setLoading(false);
         }
-    }, [address]);
+    };
 
     useEffect(() => {
-        loadChecks();
-    }, [loadChecks]);
+        fetchChecks();
+    }, [address]);
 
-    const handleCashCheck = async (check: CheckDisplay) => {
+    const handleCashCheck = async (check: CheckInfo) => {
         if (!wallet) return;
 
         setClaimingId(check.index);
-
         try {
             const xrplWallet = getWalletFromSeed(wallet.seed!);
             const result = await cashCheck(xrplWallet, check.index, check.amount);
@@ -91,19 +55,18 @@ export function ChecksList() {
             if (result.success) {
                 toast({
                     title: "Check claimed!",
-                    description: `${formatAmount(check.amount)} RLUSD has been added to your wallet`,
+                    description: `You received ${formatAmount(check.amount)} ${check.currency}`,
                     variant: "success",
                 });
-
+                await fetchChecks();
                 await refreshBalances();
-                await loadChecks();
             } else {
-                throw new Error(result.error || "Failed to cash check");
+                throw new Error(result.error);
             }
-        } catch (err) {
+        } catch (error) {
             toast({
                 title: "Failed to claim check",
-                description: err instanceof Error ? err.message : "Unknown error",
+                description: error instanceof Error ? error.message : "Unknown error",
                 variant: "destructive",
             });
         } finally {
@@ -111,20 +74,18 @@ export function ChecksList() {
         }
     };
 
-    if (!hasTrustline) {
+    if (loading) {
         return (
             <Card>
-                <CardContent className="p-8 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-4">
-                        <DollarSign className="w-8 h-8 text-amber-600" />
-                    </div>
-                    <h3 className="text-lg font-semibold mb-2">RLUSD Not Enabled</h3>
-                    <p className="text-slate-500 mb-4">
-                        Enable RLUSD on your wallet to receive and claim checks.
-                    </p>
-                    <Link href="/dashboard">
-                        <Button>Go to Dashboard</Button>
-                    </Link>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <FileCheck className="w-5 h-5" />
+                        Pending Checks
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <Skeleton className="h-20 w-full rounded-xl" />
+                    <Skeleton className="h-20 w-full rounded-xl" />
                 </CardContent>
             </Card>
         );
@@ -133,103 +94,73 @@ export function ChecksList() {
     return (
         <Card>
             <CardHeader>
-                <div className="flex items-center justify-between">
-                    <div>
-                        <CardTitle className="flex items-center gap-2">
-                            <Inbox className="w-5 h-5" />
-                            Pending Checks
-                        </CardTitle>
-                        <CardDescription>
-                            Checks waiting for you to claim
-                        </CardDescription>
-                    </div>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={loadChecks}
-                        disabled={isLoading}
-                    >
-                        <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-                    </Button>
-                </div>
+                <CardTitle className="flex items-center gap-2">
+                    <FileCheck className="w-5 h-5" />
+                    Pending Checks
+                </CardTitle>
+                <CardDescription>
+                    Claim checks sent to you
+                </CardDescription>
             </CardHeader>
             <CardContent>
-                {isLoading ? (
-                    <div className="space-y-4">
-                        {[1, 2].map((i) => (
-                            <div key={i} className="p-4 border rounded-xl">
-                                <div className="flex items-center gap-4">
-                                    <Skeleton className="w-12 h-12 rounded-full" />
-                                    <div className="flex-1">
-                                        <Skeleton className="h-4 w-24 mb-2" />
-                                        <Skeleton className="h-3 w-32" />
-                                    </div>
-                                    <Skeleton className="h-10 w-24" />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : checks.length === 0 ? (
+                {checks.length === 0 ? (
                     <div className="text-center py-8">
-                        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
                             <Inbox className="w-8 h-8 text-slate-400" />
                         </div>
-                        <h3 className="font-semibold text-slate-900 mb-1">No Pending Checks</h3>
-                        <p className="text-slate-500 text-sm">
-                            When someone sends you a check, it will appear here
-                        </p>
+                        <p className="text-slate-500">No pending checks</p>
+                        <p className="text-sm text-slate-400">Checks sent to you will appear here</p>
                     </div>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         {checks.map((check) => (
                             <div
                                 key={check.index}
-                                className="p-4 border-2 border-slate-100 rounded-xl hover:border-indigo-200 transition-colors"
+                                className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl"
                             >
-                                <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white">
-                                        <User className="w-6 h-6" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <p className="font-semibold text-slate-900">
-                                                {formatAmount(check.amount)} RLUSD
-                                            </p>
-                                            <Button
-                                                size="sm"
-                                                onClick={() => handleCashCheck(check)}
-                                                disabled={claimingId === check.index}
-                                            >
-                                                {claimingId === check.index ? (
-                                                    <>
-                                                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                                        Claiming...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                                                        Claim
-                                                    </>
-                                                )}
-                                            </Button>
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Gift className="w-4 h-4 text-emerald-600" />
+                                            <span className="font-semibold text-emerald-800">
+                                                {formatAmount(check.amount)} {check.currency}
+                                            </span>
                                         </div>
-                                        <p className="text-sm text-slate-500 font-mono truncate">
-                                            From: {formatAddress(check.sender, 8)}
-                                        </p>
-                                        {check.memo && (
-                                            <div className="mt-2 p-2 bg-slate-50 rounded-lg">
-                                                <div className="flex items-start gap-2">
-                                                    <MessageSquare className="w-4 h-4 text-slate-400 mt-0.5" />
-                                                    <p className="text-sm text-slate-600">&quot;{check.memo}&quot;</p>
-                                                </div>
-                                            </div>
-                                        )}
+                                        <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
+                                            <span>From:</span>
+                                            <span className="font-mono">{formatAddress(check.sender, 6)}</span>
+                                            <SenderTrustBadge senderAddress={check.sender} showLabel={false} />
+                                        </div>
                                     </div>
+                                    <Button
+                                        size="sm"
+                                        onClick={() => handleCashCheck(check)}
+                                        disabled={claimingId === check.index}
+                                        className="bg-emerald-600 hover:bg-emerald-700"
+                                    >
+                                        {claimingId === check.index ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <CheckCircle className="w-4 h-4 mr-1" />
+                                                Claim
+                                            </>
+                                        )}
+                                    </Button>
                                 </div>
                             </div>
                         ))}
                     </div>
                 )}
+
+                <Button 
+                    variant="ghost" 
+                    className="w-full mt-4" 
+                    onClick={fetchChecks}
+                    disabled={loading}
+                >
+                    Refresh
+                </Button>
             </CardContent>
         </Card>
     );

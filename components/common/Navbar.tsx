@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useWallet } from "@/components/wallet/WalletProvider";
+import { VerificationBadge } from "@/components/did/VerificationBadge";
 import { Button } from "@/components/ui/button";
 import { formatAddress } from "@/lib/utils/format";
 import {
@@ -13,7 +14,8 @@ import {
     LogOut,
     Wallet,
     Menu,
-    X
+    X,
+    Shield
 } from "lucide-react";
 import { useState } from "react";
 
@@ -26,11 +28,11 @@ const navItems = [
 
 export function Navbar() {
     const pathname = usePathname();
-    const { address, wallet, logout } = useWallet();
+    const { address, wallet, logout, verificationLevel } = useWallet();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    // Don't show navbar on landing page or if not logged in
-    if (pathname === "/" || !wallet) {
+    // Don't show navbar on landing page, onboarding, or if not logged in
+    if (pathname === "/" || pathname === "/onboarding" || !wallet) {
         return null;
     }
 
@@ -41,9 +43,9 @@ export function Navbar() {
                 <div className="max-w-6xl mx-auto w-full px-6 h-16 flex items-center justify-between">
                     <Link href="/dashboard" className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                            <span className="text-white font-bold text-sm">Σ</span>
+                            <span className="text-white font-bold text-sm">🎁</span>
                         </div>
-                        <span className="font-bold text-xl text-slate-900">SigmaPay</span>
+                        <span className="font-bold text-xl text-slate-900">RemitGift</span>
                     </Link>
 
                     <div className="flex items-center gap-1">
@@ -63,9 +65,19 @@ export function Navbar() {
                                 </Link>
                             );
                         })}
+                        <Link href="/verify">
+                            <Button
+                                variant={pathname === "/verify" ? "secondary" : "ghost"}
+                                size="sm"
+                            >
+                                <Shield className="w-4 h-4 mr-2" />
+                                Verify
+                            </Button>
+                        </Link>
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <VerificationBadge level={verificationLevel} size="sm" />
                         <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg">
                             <Wallet className="w-4 h-4 text-slate-500" />
                             <span className="text-sm font-mono text-slate-600">
@@ -126,10 +138,21 @@ export function Navbar() {
                             </Button>
                         </div>
 
-                        <div className="p-3 bg-slate-50 rounded-xl mb-6">
+                        <div className="mb-4">
+                            <VerificationBadge level={verificationLevel} />
+                        </div>
+
+                        <div className="p-3 bg-slate-50 rounded-xl mb-4">
                             <p className="text-xs text-slate-500 mb-1">Wallet Address</p>
                             <p className="text-sm font-mono text-slate-700 truncate">{address}</p>
                         </div>
+
+                        <Link href="/verify" onClick={() => setMobileMenuOpen(false)}>
+                            <Button variant="outline" className="w-full mb-4">
+                                <Shield className="w-4 h-4 mr-2" />
+                                Verify Identity
+                            </Button>
+                        </Link>
 
                         <Button
                             variant="destructive"
@@ -148,7 +171,6 @@ export function Navbar() {
 
             {/* Spacer for fixed navbars */}
             <div className="hidden md:block h-16" />
-            <div className="md:hidden h-16" />
         </>
     );
 }
