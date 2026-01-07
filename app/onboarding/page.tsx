@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/components/wallet/WalletProvider";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,8 @@ import {
     EyeOff,
     Shield,
     Zap,
-    DollarSign
+    DollarSign,
+    AlertTriangle
 } from "lucide-react";
 
 type Step = "welcome" | "choice" | "create" | "import" | "seed" | "fund" | "trustline" | "did" | "complete";
@@ -36,7 +37,9 @@ export default function OnboardingPage() {
         wallet,
         isFunded,
         hasTrustline,
-        hasDID
+        hasDID,
+        refreshBalances,
+        balances
     } = useWallet();
 
     const [step, setStep] = useState<Step>("welcome");
@@ -48,6 +51,14 @@ export default function OnboardingPage() {
     const [seedCopied, setSeedCopied] = useState(false);
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [fundingError, setFundingError] = useState<string | null>(null);
+
+    // Refresh balances when entering fund or trustline steps
+    useEffect(() => {
+        if ((step === "fund" || step === "trustline") && wallet) {
+            refreshBalances();
+        }
+    }, [step, wallet, refreshBalances]);
 
     const handleCreateWallet = async () => {
         if (password.length < 6) {
@@ -101,20 +112,37 @@ export default function OnboardingPage() {
 
     const handleFundWallet = async () => {
         setLoading(true);
+        setFundingError(null);
         try {
             const success = await fundWallet();
             if (success) {
-                setStep("trustline");
+                await refreshBalances();
                 toast({ title: "Wallet funded!", description: "You received test XRP", variant: "success" });
+                // Auto-advance after short delay
+                setTimeout(() => setStep("trustline"), 1000);
             } else {
-                toast({ title: "Funding failed", description: "Try again", variant: "destructive" });
+                setFundingError("Faucet might be busy. Please try again.");
+                toast({ title: "Funding failed", description: "Try again in a moment", variant: "destructive" });
             }
+        } catch (error) {
+            setFundingError(String(error));
+            toast({ title: "Funding failed", description: String(error), variant: "destructive" });
         } finally {
             setLoading(false);
         }
     };
 
     const handleSetupTrustline = async () => {
+        // Check if funded first
+        if (!isFunded && parseFloat(balances.xrp) < 1) {
+            toast({ 
+                title: "Wallet not funded", 
+                description: "You need XRP to pay for the trustline transaction. Go back and fund your wallet first.",
+                variant: "destructive" 
+            });
+            return;
+        }
+
         setLoading(true);
         try {
             const success = await setupTrustline();
@@ -122,8 +150,18 @@ export default function OnboardingPage() {
                 setStep("did");
                 toast({ title: "RLUSD enabled!", variant: "success" });
             } else {
-                toast({ title: "Trustline failed", variant: "destructive" });
+                toast({ 
+                    title: "Trustline failed", 
+                    description: "Make sure your wallet has XRP. Go back to fund if needed.",
+                    variant: "destructive" 
+                });
             }
+        } catch (error) {
+            toast({ 
+                title: "Trustline failed", 
+                description: "You need XRP to create the trustline. Please fund your wallet first.",
+                variant: "destructive" 
+            });
         } finally {
             setLoading(false);
         }
@@ -137,8 +175,10 @@ export default function OnboardingPage() {
                 setStep("complete");
                 toast({ title: "Identity created!", variant: "success" });
             } else {
-                toast({ title: "DID creation failed", variant: "destructive" });
+                toast({ title: "DID creation failed", description: "You can skip this and do it later", variant: "destructive" });
             }
+        } catch (error) {
+            toast({ title: "DID creation failed", description: "You can skip this and do it later", variant: "destructive" });
         } finally {
             setLoading(false);
         }
@@ -148,6 +188,8 @@ export default function OnboardingPage() {
         router.push("/dashboard");
     };
 
+    const xrpBalance = parseFloat(balances.xrp) || 0;
+
     return (
         <div className="min-h-screen flex items-center justify-center p-4">
             <div className="w-full max-w-md">
@@ -156,7 +198,7 @@ export default function OnboardingPage() {
                     <Card className="animate-fade-in">
                         <CardHeader className="text-center pb-2">
                             <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto mb-4">
-                                <span className="text-4xl font-bold text-white">🎁</span>
+                                <span className="text-4xl font-bold text-white">Σ</span>
                             </div>
                             <CardTitle className="text-2xl">Welcome to SigmaPay</CardTitle>
                             <CardDescription>
@@ -359,7 +401,7 @@ export default function OnboardingPage() {
                                 <strong>Never share</strong> your seed phrase. Anyone with it can access your funds.
                             </div>
                             <Button className="w-full" onClick={() => setStep("fund")}>
-                                I've Saved It
+                                I&apos;ve Saved It
                                 <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
                         </CardContent>
@@ -380,17 +422,37 @@ export default function OnboardingPage() {
                                     You&apos;ll receive ~10 test XRP to cover transaction fees
                                 </p>
                             </div>
+
+                            {/* Show current balance */}
+                            {xrpBalance > 0 && (
+                                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                                    <p className="text-sm text-emerald-700">
+                                        <Check className="w-4 h-4 inline mr-1" />
+                                        Current balance: <strong>{xrpBalance.toFixed(2)} XRP</strong>
+                                    </p>
+                                </div>
+                            )}
+
+                            {fundingError && (
+                                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                                    <AlertTriangle className="w-4 h-4 inline mr-1" />
+                                    {fundingError}
+                                </div>
+                            )}
+
                             <Button 
                                 className="w-full" 
                                 onClick={handleFundWallet}
-                                disabled={loading || isFunded}
+                                disabled={loading}
                             >
-                                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                                {isFunded ? "Already Funded" : "Fund Wallet"}
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
+                                {isFunded || xrpBalance > 0 ? "Fund More XRP" : "Fund Wallet"}
                             </Button>
-                            {isFunded && (
-                                <Button className="w-full" variant="outline" onClick={() => setStep("trustline")}>
-                                    Continue <ArrowRight className="w-4 h-4 ml-2" />
+                            
+                            {(isFunded || xrpBalance > 0) && (
+                                <Button className="w-full" variant="default" onClick={() => setStep("trustline")}>
+                                    Continue to Enable RLUSD
+                                    <ArrowRight className="w-4 h-4 ml-2" />
                                 </Button>
                             )}
                         </CardContent>
@@ -411,19 +473,45 @@ export default function OnboardingPage() {
                                     RLUSD is a USD-backed stablecoin. 1 RLUSD = 1 USD
                                 </p>
                             </div>
+
+                            {/* Show XRP balance warning if low */}
+                            {xrpBalance < 1 && !hasTrustline && (
+                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                                    <AlertTriangle className="w-4 h-4 inline mr-1" />
+                                    You need XRP to create the trustline. 
+                                    <button 
+                                        onClick={() => setStep("fund")} 
+                                        className="underline ml-1 font-medium"
+                                    >
+                                        Go back to fund your wallet
+                                    </button>
+                                </div>
+                            )}
+
+                            {xrpBalance >= 1 && (
+                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-600 text-center">
+                                    XRP Balance: <strong>{xrpBalance.toFixed(2)} XRP</strong> ✓
+                                </div>
+                            )}
+
                             <Button 
                                 className="w-full" 
                                 onClick={handleSetupTrustline}
-                                disabled={loading || hasTrustline}
+                                disabled={loading || hasTrustline || xrpBalance < 1}
                             >
                                 {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                                {hasTrustline ? "Already Enabled" : "Enable RLUSD"}
+                                {hasTrustline ? "Already Enabled ✓" : "Enable RLUSD"}
                             </Button>
+
                             {hasTrustline && (
-                                <Button className="w-full" variant="outline" onClick={() => setStep("did")}>
+                                <Button className="w-full" variant="default" onClick={() => setStep("did")}>
                                     Continue <ArrowRight className="w-4 h-4 ml-2" />
                                 </Button>
                             )}
+
+                            <Button variant="ghost" className="w-full" onClick={() => setStep("fund")}>
+                                <ArrowLeft className="w-4 h-4 mr-2" /> Back to Fund
+                            </Button>
                         </CardContent>
                     </Card>
                 )}
@@ -448,10 +536,10 @@ export default function OnboardingPage() {
                                 disabled={loading || hasDID}
                             >
                                 {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                                {hasDID ? "Already Created" : "Create Identity"}
+                                {hasDID ? "Already Created ✓" : "Create Identity"}
                             </Button>
                             {hasDID && (
-                                <Button className="w-full" variant="outline" onClick={() => setStep("complete")}>
+                                <Button className="w-full" variant="default" onClick={() => setStep("complete")}>
                                     Continue <ArrowRight className="w-4 h-4 ml-2" />
                                 </Button>
                             )}
@@ -484,4 +572,3 @@ export default function OnboardingPage() {
         </div>
     );
 }
-
