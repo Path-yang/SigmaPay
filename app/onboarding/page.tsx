@@ -132,6 +132,8 @@ export default function OnboardingPage() {
         }
     };
 
+    const [trustlineError, setTrustlineError] = useState<string | null>(null);
+
     const handleSetupTrustline = async () => {
         // Check if funded first
         if (!isFunded && parseFloat(balances.xrp) < 1) {
@@ -144,22 +146,27 @@ export default function OnboardingPage() {
         }
 
         setLoading(true);
+        setTrustlineError(null);
         try {
-            const success = await setupTrustline();
-            if (success) {
+            const result = await setupTrustline();
+            if (result.success) {
                 setStep("did");
                 toast({ title: "RLUSD enabled!", variant: "success" });
             } else {
+                const errorMsg = result.error || "Trustline creation failed. You can skip this step for now.";
+                setTrustlineError(errorMsg);
                 toast({ 
                     title: "Trustline failed", 
-                    description: "Make sure your wallet has XRP. Go back to fund if needed.",
+                    description: errorMsg,
                     variant: "destructive" 
                 });
             }
         } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : "Unknown error";
+            setTrustlineError(errorMsg);
             toast({ 
                 title: "Trustline failed", 
-                description: "You need XRP to create the trustline. Please fund your wallet first.",
+                description: errorMsg,
                 variant: "destructive" 
             });
         } finally {
@@ -494,6 +501,14 @@ export default function OnboardingPage() {
                                 </div>
                             )}
 
+                            {/* Show trustline error if any */}
+                            {trustlineError && (
+                                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                                    <AlertTriangle className="w-4 h-4 inline mr-1" />
+                                    {trustlineError}
+                                </div>
+                            )}
+
                             <Button 
                                 className="w-full" 
                                 onClick={handleSetupTrustline}
@@ -508,6 +523,11 @@ export default function OnboardingPage() {
                                     Continue <ArrowRight className="w-4 h-4 ml-2" />
                                 </Button>
                             )}
+
+                            {/* Skip option - always available for testnet issues */}
+                            <Button variant="outline" className="w-full" onClick={() => setStep("did")}>
+                                Skip for now (can enable later)
+                            </Button>
 
                             <Button variant="ghost" className="w-full" onClick={() => setStep("fund")}>
                                 <ArrowLeft className="w-4 h-4 mr-2" /> Back to Fund

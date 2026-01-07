@@ -38,7 +38,7 @@ interface WalletContextType {
     logout: () => void;
     refreshBalances: () => Promise<void>;
     fundWallet: () => Promise<boolean>;
-    setupTrustline: () => Promise<boolean>;
+    setupTrustline: () => Promise<{ success: boolean; error?: string }>;
     
     // DID Actions
     initializeDID: () => Promise<boolean>;
@@ -251,8 +251,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const setupTrustline = async (): Promise<boolean> => {
-        if (!wallet) return false;
+    const setupTrustline = async (): Promise<{ success: boolean; error?: string }> => {
+        if (!wallet) return { success: false, error: "No wallet connected" };
 
         try {
             setIsLoading(true);
@@ -261,15 +261,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             if (result.success) {
                 setHasTrustline(true);
                 await refreshBalances();
-                return true;
+                return { success: true };
             } else {
-                setError(result.error || "Failed to create trustline");
-                return false;
+                const errorMsg = result.error || "Failed to create trustline";
+                setError(errorMsg);
+                return { success: false, error: errorMsg };
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : "Failed to create trustline";
             setError(message);
-            return false;
+            return { success: false, error: message };
         } finally {
             setIsLoading(false);
         }
