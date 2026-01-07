@@ -7,7 +7,7 @@ import { generateWallet, importWallet, getWalletFromSeed, fundExistingWallet } f
 import { getBalances, isAccountFunded } from "@/lib/xrpl/balance";
 import { createRLUSDTrustline, checkTrustlineExists } from "@/lib/xrpl/trustline";
 import { getClient, disconnectClient } from "@/lib/xrpl/client";
-import { getDID, createDID, updateVerificationLevel, RemitGiftDID } from "@/lib/xrpl/did";
+import { getDID, createDID, updateVerificationLevel, SigmaPayDID } from "@/lib/xrpl/did";
 import { VerificationLevel, LIMITS } from "@/lib/xrpl/constants";
 import type { Balances } from "@/lib/xrpl/balance";
 
@@ -23,7 +23,7 @@ interface WalletContextType {
     hasWallet: boolean;
     
     // DID related
-    did: RemitGiftDID | null;
+    did: SigmaPayDID | null;
     verificationLevel: VerificationLevel;
     sendLimit: number;
     isVerified: boolean;
@@ -60,7 +60,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     const [hasWallet, setHasWallet] = useState(false);
     
     // DID state
-    const [did, setDID] = useState<RemitGiftDID | null>(null);
+    const [did, setDID] = useState<SigmaPayDID | null>(null);
 
     // Check for stored wallet on mount
     useEffect(() => {

@@ -11,12 +11,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "RemitGift - Cross-Border Payments Made Simple",
+  title: "SigmaPay - Cross-Border Payments Made Simple",
   description: "Send money home instantly with near-zero fees using RLUSD on the XRP Ledger. Fast, secure, and verified cross-border remittance.",
-  keywords: ["remittance", "XRPL", "RLUSD", "cross-border", "payment", "crypto", "stablecoin", "RemitGift", "DID", "verification"],
-  authors: [{ name: "RemitGift Team" }],
+  keywords: ["remittance", "XRPL", "RLUSD", "cross-border", "payment", "crypto", "stablecoin", "SigmaPay", "DID", "verification"],
+  authors: [{ name: "SigmaPay Team" }],
   openGraph: {
-    title: "RemitGift - Cross-Border Payments Made Simple",
+    title: "SigmaPay - Cross-Border Payments Made Simple",
     description: "Send money home instantly with near-zero fees using RLUSD on the XRP Ledger.",
     type: "website",
   },

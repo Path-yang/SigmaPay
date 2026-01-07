@@ -43,9 +43,9 @@ export function Navbar() {
                 <div className="max-w-6xl mx-auto w-full px-6 h-16 flex items-center justify-between">
                     <Link href="/dashboard" className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                            <span className="text-white font-bold text-sm">🎁</span>
+                            <span className="text-white font-bold text-sm">Σ</span>
                         </div>
-                        <span className="font-bold text-xl text-slate-900">RemitGift</span>
+                        <span className="font-bold text-xl text-slate-900">SigmaPay</span>
                     </Link>
 
                     <div className="flex items-center gap-1">

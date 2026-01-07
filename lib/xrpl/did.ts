@@ -2,8 +2,8 @@ import { getClient } from "./client";
 import { VerificationLevel } from "./constants";
 import type { Wallet } from "xrpl";
 
-// DID Document structure for RemitGift
-export interface RemitGiftDID {
+// DID Document structure for SigmaPay
+export interface SigmaPayDID {
   id: string;
   verificationLevel: VerificationLevel;
   createdAt: string;
@@ -34,13 +34,13 @@ interface DIDDeleteTransaction {
  */
 export async function createDID(
   wallet: Wallet,
-  didData: Partial<RemitGiftDID>
+  didData: Partial<SigmaPayDID>
 ): Promise<{ success: boolean; hash?: string; error?: string }> {
   try {
     const client = await getClient();
 
     // Create DID document data
-    const didDocument: RemitGiftDID = {
+    const didDocument: SigmaPayDID = {
       id: `did:xrpl:${wallet.classicAddress}`,
       verificationLevel: didData.verificationLevel || VerificationLevel.UNVERIFIED,
       createdAt: didData.createdAt || new Date().toISOString(),
@@ -57,7 +57,7 @@ export async function createDID(
       .toUpperCase();
 
     // URI pointing to verification info
-    const uriHex = Buffer.from(`https://remitgift.app/did/${wallet.classicAddress}`, "utf8")
+    const uriHex = Buffer.from(`https://sigmapay.app/did/${wallet.classicAddress}`, "utf8")
       .toString("hex")
       .toUpperCase();
 
@@ -97,7 +97,7 @@ export async function createDID(
 /**
  * Get DID data for an address
  */
-export async function getDID(address: string): Promise<RemitGiftDID | null> {
+export async function getDID(address: string): Promise<SigmaPayDID | null> {
   try {
     const client = await getClient();
 
@@ -119,7 +119,7 @@ export async function getDID(address: string): Promise<RemitGiftDID | null> {
     if (didObject && didObject.DIDDocument) {
       // Decode the DID document from hex
       const didDocString = Buffer.from(didObject.DIDDocument, "hex").toString("utf8");
-      return JSON.parse(didDocString) as RemitGiftDID;
+      return JSON.parse(didDocString) as SigmaPayDID;
     }
 
     return null;

@@ -1,4 +1,4 @@
-# RemitGift 🎁💸
+# SigmaPay Σ
 
 > Send money home instantly. No hidden fees. Verified & secure.
 
@@ -8,7 +8,7 @@ Sending small amounts of money internationally (remittances) is expensive due to
 
 ## 💡 Solution
 
-RemitGift is a mobile-first web app that leverages the XRP Ledger to enable instant, low-cost international transfers using RLUSD stablecoin. With built-in decentralized identity (DID) verification, users get higher limits and instant transfers while maintaining compliance.
+SigmaPay is a mobile-first web app that leverages the XRP Ledger to enable instant, low-cost international transfers using RLUSD stablecoin. With built-in decentralized identity (DID) verification, users get higher limits and instant transfers while maintaining compliance.
 
 ## 🔧 XRPL Features Used
 
@@ -115,7 +115,7 @@ npm start
 ## 🏗 Architecture
 
 ```
-remitgift/
+SigmaPay/
 ├── app/
 │   ├── page.tsx              # Landing page
 │   ├── layout.tsx            # Root layout

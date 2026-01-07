@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { getDID, createDID, updateVerificationLevel, RemitGiftDID } from "@/lib/xrpl/did";
+import { getDID, createDID, updateVerificationLevel, SigmaPayDID } from "@/lib/xrpl/did";
 import { VerificationLevel, LIMITS } from "@/lib/xrpl/constants";
 import type { Wallet } from "xrpl";
 
 export function useDID(wallet: Wallet | null, address: string | null) {
-  const [did, setDID] = useState<RemitGiftDID | null>(null);
+  const [did, setDID] = useState<SigmaPayDID | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(false);

@@ -158,7 +158,7 @@ export default function OnboardingPage() {
                             <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto mb-4">
                                 <span className="text-4xl font-bold text-white">🎁</span>
                             </div>
-                            <CardTitle className="text-2xl">Welcome to RemitGift</CardTitle>
+                            <CardTitle className="text-2xl">Welcome to SigmaPay</CardTitle>
                             <CardDescription>
                                 Send money home instantly with near-zero fees
                             </CardDescription>
