@@ -19,6 +19,8 @@ const nextConfig = {
   trailingSlash: false,
   // Enable React strict mode
   reactStrictMode: true,
+  // External packages that should not be bundled
+  serverExternalPackages: ['xrpl'],
 };
 
 module.exports = nextConfig;
