@@ -3,8 +3,8 @@
 export const XRPL_TESTNET_URL = "wss://testnet.xrpl-labs.com";
 export const XRPL_TESTNET_FAUCET = "https://faucet.altnet.rippletest.net/accounts";
 
-// RLUSD on Testnet
-export const RLUSD_ISSUER = "rQhWct2fTR6gPgmc8sLMdM6U8Lwrjvzzyj";
+// RLUSD on Testnet - REAL ISSUER FROM tryrlusd.com
+export const RLUSD_ISSUER = "rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV";
 // XRPL requires non-3-char currencies to be 40-char hex
 // "RLUSD" encoded as hex, padded to 40 chars
 export const RLUSD_CURRENCY = "524C555344000000000000000000000000000000"; // "RLUSD" in hex

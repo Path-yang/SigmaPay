@@ -10,6 +10,12 @@ import { getClient, disconnectClient } from "@/lib/xrpl/client";
 import { getDID, createDID, updateVerificationLevel, SigmaPayDID } from "@/lib/xrpl/did";
 import { VerificationLevel, LIMITS } from "@/lib/xrpl/constants";
 import type { Balances } from "@/lib/xrpl/balance";
+import { 
+    getEscrowsForAddress, 
+    getStoredEscrows, 
+    EscrowInfo, 
+    StoredEscrow 
+} from "@/lib/xrpl/escrow";
 
 interface WalletContextType {
     address: string | null;
@@ -44,6 +50,13 @@ interface WalletContextType {
     initializeDID: () => Promise<boolean>;
     verifyIdentity: (level: VerificationLevel, data?: { name?: string; email?: string; phone?: string }) => Promise<boolean>;
     refreshDID: () => Promise<void>;
+    
+    // Escrow related
+    escrows: {
+        sent: (EscrowInfo | StoredEscrow)[];
+        received: (EscrowInfo | StoredEscrow)[];
+    };
+    refreshEscrows: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -61,6 +74,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     
     // DID state
     const [did, setDID] = useState<SigmaPayDID | null>(null);
+    
+    // Escrow state
+    const [escrows, setEscrows] = useState<{
+        sent: (EscrowInfo | StoredEscrow)[];
+        received: (EscrowInfo | StoredEscrow)[];
+    }>({ sent: [], received: [] });
 
     // Check for stored wallet on mount
     useEffect(() => {
@@ -86,6 +105,39 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         }
     }, [address]);
 
+    // Refresh escrows
+    const refreshEscrows = useCallback(async () => {
+        if (!address) {
+            setEscrows({ sent: [], received: [] });
+            return;
+        }
+        try {
+            // Get escrows from chain
+            const chainEscrows = await getEscrowsForAddress(address);
+            
+            // Get escrows from local storage (includes fulfillments)
+            const storedEscrows = getStoredEscrows(address);
+
+            // Merge chain escrows with stored data
+            const mergedSent = chainEscrows.sent.map(escrow => {
+                const stored = storedEscrows.sent.find(
+                    s => s.owner === escrow.owner && s.sequence === escrow.sequence
+                );
+                if (stored) {
+                    return { ...escrow, ...stored, status: escrow.status };
+                }
+                return escrow;
+            });
+
+            setEscrows({
+                sent: mergedSent,
+                received: [...chainEscrows.received, ...storedEscrows.received],
+            });
+        } catch (err) {
+            console.error("Failed to fetch escrows:", err);
+        }
+    }, [address]);
+
     // Connect to XRPL and refresh data when wallet is unlocked
     useEffect(() => {
         if (wallet) {
@@ -95,6 +147,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                     setIsConnected(true);
                     await refreshBalances();
                     await refreshDID();
+                    await refreshEscrows();
                 } catch (err) {
                     console.error("Failed to connect:", err);
                     setError("Failed to connect to XRPL network");
@@ -108,7 +161,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                 disconnectClient();
             }
         };
-    }, [wallet, refreshDID]);
+    }, [wallet, refreshDID, refreshEscrows]);
 
     const refreshBalances = useCallback(async () => {
         if (!address) return;
@@ -375,6 +428,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                 initializeDID,
                 verifyIdentity,
                 refreshDID,
+                
+                // Escrow
+                escrows,
+                refreshEscrows,
             }}
         >
             {children}

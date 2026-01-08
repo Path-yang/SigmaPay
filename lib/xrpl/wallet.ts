@@ -16,21 +16,54 @@ export function generateWallet(): WalletInfo {
     };
 }
 
-export function importWallet(seed: string): WalletInfo {
+export function importWallet(seedOrMnemonic: string): WalletInfo {
+    const input = seedOrMnemonic.trim();
+    
+    // Check if it's a mnemonic (multiple words separated by spaces)
+    const words = input.split(/\s+/);
+    const isMnemonic = words.length >= 12 && words.length <= 24;
+    
     try {
-        const wallet = Wallet.fromSeed(seed);
+        let wallet: Wallet;
+        let seedToStore: string;
+        
+        if (isMnemonic) {
+            // Import from mnemonic phrase (12/24 words)
+            // Normalize the mnemonic (lowercase, single spaces)
+            const normalizedMnemonic = words.map(w => w.toLowerCase()).join(' ');
+            wallet = Wallet.fromMnemonic(normalizedMnemonic);
+            // Store the mnemonic since wallet.seed is undefined for mnemonic-derived wallets
+            seedToStore = normalizedMnemonic;
+        } else {
+            // Import from secret seed (starts with 's')
+            wallet = Wallet.fromSeed(input);
+            seedToStore = wallet.seed!;
+        }
+        
         return {
             address: wallet.classicAddress,
-            seed: wallet.seed!,
+            seed: seedToStore,
             publicKey: wallet.publicKey,
         };
     } catch (error) {
-        throw new Error("Invalid seed phrase. Please check and try again.");
+        // Provide helpful error message
+        if (isMnemonic) {
+            throw new Error("Invalid mnemonic phrase. Make sure all words are correct and in the right order.");
+        } else {
+            throw new Error("Invalid seed. Enter a secret key (starting with 's') or a 12/24 word mnemonic phrase.");
+        }
     }
 }
 
-export function getWalletFromSeed(seed: string): Wallet {
-    return Wallet.fromSeed(seed);
+export function getWalletFromSeed(seedOrMnemonic: string): Wallet {
+    const input = seedOrMnemonic.trim();
+    const words = input.split(/\s+/);
+    const isMnemonic = words.length >= 12 && words.length <= 24;
+    
+    if (isMnemonic) {
+        return Wallet.fromMnemonic(input);
+    }
+    return Wallet.fromSeed(input);
 }
 
 export async function fundWalletFromFaucet(address: string): Promise<{
