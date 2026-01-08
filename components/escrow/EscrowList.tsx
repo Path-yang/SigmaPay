@@ -71,7 +71,12 @@ export function EscrowList() {
           e.owner === stored.owner && e.sequence === stored.sequence
         )) {
           // Mark as possibly completed if not on chain
-          mergedSent.push({ ...stored, status: "completed" as const });
+          // Add index placeholder for stored escrows
+          mergedSent.push({ 
+            ...stored, 
+            index: `stored-${stored.owner}-${stored.sequence}`,
+            status: "completed" as const 
+          });
         }
       }
 
@@ -94,7 +99,12 @@ export function EscrowList() {
           e.owner === stored.owner && e.sequence === stored.sequence
         )) {
           // Mark as possibly completed if not on chain
-          mergedReceived.push({ ...stored, status: "completed" as const });
+          // Add index placeholder for stored escrows
+          mergedReceived.push({ 
+            ...stored, 
+            index: `stored-${stored.owner}-${stored.sequence}`,
+            status: "completed" as const 
+          });
         }
       }
 

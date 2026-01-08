@@ -111,7 +111,7 @@ export async function getTransactionHistory(address: string): Promise<Transactio
                 // Try to get amount from AffectedNodes in meta
                 let amountValue = "0";
                 if (typeof meta === "object" && meta !== null && "AffectedNodes" in meta) {
-                    const affectedNodes = (meta as { AffectedNodes?: Array<Record<string, unknown>> }).AffectedNodes;
+                    const affectedNodes = (meta as unknown as { AffectedNodes?: Array<Record<string, unknown>> }).AffectedNodes;
                     if (affectedNodes) {
                         // Look for DeletedNode of type Escrow to get the amount
                         for (const node of affectedNodes) {
@@ -149,7 +149,7 @@ export async function getTransactionHistory(address: string): Promise<Transactio
                 // Try to get amount from AffectedNodes in meta (deleted escrow)
                 let amountValue = "0";
                 if (typeof meta === "object" && meta !== null && "AffectedNodes" in meta) {
-                    const affectedNodes = (meta as { AffectedNodes?: Array<Record<string, unknown>> }).AffectedNodes;
+                    const affectedNodes = (meta as unknown as { AffectedNodes?: Array<Record<string, unknown>> }).AffectedNodes;
                     if (affectedNodes) {
                         for (const node of affectedNodes) {
                             if ("DeletedNode" in node) {
