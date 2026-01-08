@@ -1,5 +1,4 @@
 import { Wallet } from "xrpl";
-import { getClient } from "./client";
 
 export interface WalletInfo {
     address: string;
@@ -72,13 +71,28 @@ export async function fundWalletFromFaucet(address: string): Promise<{
     error?: string;
 }> {
     try {
-        const client = await getClient();
-        // Create a temporary wallet with the address to fund
-        const result = await client.fundWallet();
-        return {
-            success: true,
-            balance: result.balance,
-        };
+        // Use our server-side API route for more reliable funding
+        const response = await fetch("/api/faucet", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ address }),
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            return {
+                success: true,
+                balance: result.balance,
+            };
+        } else {
+            return {
+                success: false,
+                error: result.error || "Failed to fund wallet",
+            };
+        }
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to fund wallet";
         return {
@@ -88,19 +102,36 @@ export async function fundWalletFromFaucet(address: string): Promise<{
     }
 }
 
-export async function fundExistingWallet(seed: string): Promise<{
+export async function fundExistingWallet(seedOrMnemonic: string): Promise<{
     success: boolean;
     balance?: number;
     error?: string;
 }> {
     try {
-        const client = await getClient();
-        const wallet = Wallet.fromSeed(seed);
-        const result = await client.fundWallet(wallet);
-        return {
-            success: true,
-            balance: result.balance,
-        };
+        const wallet = getWalletFromSeed(seedOrMnemonic);
+        
+        // Use our server-side API route for more reliable funding
+        const response = await fetch("/api/faucet", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ address: wallet.classicAddress }),
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            return {
+                success: true,
+                balance: result.balance,
+            };
+        } else {
+            return {
+                success: false,
+                error: result.error || "Failed to fund wallet",
+            };
+        }
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to fund wallet";
         return {
