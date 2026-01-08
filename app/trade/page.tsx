@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useWallet } from "@/components/wallet/WalletProvider";
-import { Navbar } from "@/components/common/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -271,396 +270,393 @@ export default function TradePage() {
   if (walletLoading || !wallet) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50">
-      <Navbar />
-      
-      <main className="max-w-2xl mx-auto px-4 py-6 pb-24">
-        {/* Back Button */}
-        <Button 
-          variant="ghost" 
-          onClick={() => router.push("/rwa")}
-          className="mb-4"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to RWA Marketplace
-        </Button>
+    <div className="space-y-6 animate-fade-in max-w-2xl mx-auto">
+      {/* Back Button */}
+      <Button 
+        variant="ghost" 
+        onClick={() => router.push("/rwa")}
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to RWA Marketplace
+      </Button>
 
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Trade RWA Tokens</h1>
-          <p className="text-slate-600">
-            Buy and sell RWA tokens using XRPL's built-in DEX
-          </p>
-        </div>
+      {/* Header */}
+      <div className="text-center">
+        <h1 className="text-2xl font-bold text-foreground mb-2">Trade RWA Tokens</h1>
+        <p className="text-muted-foreground">
+          Buy and sell RWA tokens using XRPL's built-in DEX
+        </p>
+      </div>
 
-        {/* Warning Card */}
-        <Card className="mb-6 border-amber-200 bg-amber-50">
-          <CardContent className="pt-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
-              <div className="text-sm text-amber-800">
-                <p className="font-semibold mb-1">How It Works</p>
-                <p>Your offer is posted to the XRPL order book. If a matching offer exists, 
-                   the trade executes instantly. Otherwise, it waits until someone accepts your price.</p>
-              </div>
+      {/* Warning Card */}
+      <Card className="border-warning/30 bg-warning/5">
+        <CardContent className="pt-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-warning mt-0.5" />
+            <div className="text-sm text-warning">
+              <p className="font-semibold mb-1">How It Works</p>
+              <p>Your offer is posted to the XRPL order book. If a matching offer exists, 
+                 the trade executes instantly. Otherwise, it waits until someone accepts your price.</p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Trading Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="sell" className="flex items-center gap-2">
-              <Tag className="w-4 h-4" />
-              Sell Tokens
-            </TabsTrigger>
-            <TabsTrigger value="buy" className="flex items-center gap-2">
-              <ShoppingCart className="w-4 h-4" />
-              Buy Tokens
-            </TabsTrigger>
-          </TabsList>
+      {/* Trading Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="sell" className="flex items-center gap-2">
+            <Tag className="w-4 h-4" />
+            Sell Tokens
+          </TabsTrigger>
+          <TabsTrigger value="buy" className="flex items-center gap-2">
+            <ShoppingCart className="w-4 h-4" />
+            Buy Tokens
+          </TabsTrigger>
+        </TabsList>
 
-          {/* SELL TAB */}
-          <TabsContent value="sell">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingDown className="w-5 h-5 text-red-600" />
-                  Create Sell Offer
-                </CardTitle>
-                <CardDescription>
-                  Sell your RWA tokens for XRP or RLUSD
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {loading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-                  </div>
-                ) : myTokens.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500">
-                    <Coins className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                    <p>You don't have any RWA tokens to sell.</p>
-                    <Button 
-                      variant="outline" 
-                      className="mt-4"
-                      onClick={() => router.push("/tokenize")}
-                    >
-                      Create a Token
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    {/* What you're selling */}
-                    <div className="p-4 bg-red-50 rounded-xl space-y-3">
-                      <h3 className="font-semibold text-red-800 flex items-center gap-2">
-                        <TrendingDown className="w-4 h-4" />
-                        You're Selling
-                      </h3>
-                      
-                      <div>
-                        <Label>Select Token</Label>
-                        <select 
-                          value={sellToken}
-                          onChange={(e) => setSellToken(e.target.value)}
-                          className="w-full p-2 border rounded-lg mt-1"
-                        >
-                          <option value="">Choose a token...</option>
-                          {myTokens.map((token) => (
-                            <option key={`${token.currency}-${token.issuer}`} value={token.currency}>
-                              {token.currencyDisplay} (Balance: {parseFloat(token.balance).toLocaleString()})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <Label>Amount to Sell</Label>
-                        <Input
-                          type="number"
-                          value={sellAmount}
-                          onChange={(e) => setSellAmount(e.target.value)}
-                          placeholder="0.00"
-                        />
-                        {selectedSellToken && (
-                          <p className="text-xs text-slate-500 mt-1">
-                            Available: {parseFloat(selectedSellToken.balance).toLocaleString()} {selectedSellToken.currencyDisplay}
-                          </p>
-                        )}
-                      </div>
+        {/* SELL TAB */}
+        <TabsContent value="sell">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingDown className="w-5 h-5 text-destructive" />
+                Create Sell Offer
+              </CardTitle>
+              <CardDescription>
+                Sell your RWA tokens for XRP or RLUSD
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                </div>
+              ) : myTokens.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Coins className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+                  <p>You don't have any RWA tokens to sell.</p>
+                  <Button 
+                    variant="outline" 
+                    className="mt-4"
+                    onClick={() => router.push("/tokenize")}
+                  >
+                    Create a Token
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  {/* What you're selling */}
+                  <div className="p-4 bg-destructive/10 rounded-xl space-y-3">
+                    <h3 className="font-semibold text-destructive flex items-center gap-2">
+                      <TrendingDown className="w-4 h-4" />
+                      You're Selling
+                    </h3>
+                    
+                    <div>
+                      <Label>Select Token</Label>
+                      <select 
+                        value={sellToken}
+                        onChange={(e) => setSellToken(e.target.value)}
+                        className="w-full p-2 border rounded-lg mt-1 bg-background"
+                      >
+                        <option value="">Choose a token...</option>
+                        {myTokens.map((token) => (
+                          <option key={`${token.currency}-${token.issuer}`} value={token.currency}>
+                            {token.currencyDisplay} (Balance: {parseFloat(token.balance).toLocaleString()})
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
-                    {/* Arrow */}
-                    <div className="flex justify-center">
-                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                        <ArrowLeftRight className="w-5 h-5 text-indigo-600" />
-                      </div>
-                    </div>
-
-                    {/* What you want to receive */}
-                    <div className="p-4 bg-green-50 rounded-xl space-y-3">
-                      <h3 className="font-semibold text-green-800 flex items-center gap-2">
-                        <Coins className="w-4 h-4" />
-                        You Want to Receive
-                      </h3>
-                      
-                      <div>
-                        <Label>Currency</Label>
-                        <div className="flex gap-2 mt-1">
-                          <Button
-                            type="button"
-                            variant={sellForType === "XRP" ? "default" : "outline"}
-                            onClick={() => setSellForType("XRP")}
-                            className="flex-1"
-                          >
-                            XRP
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={sellForType === "RLUSD" ? "default" : "outline"}
-                            onClick={() => setSellForType("RLUSD")}
-                            className="flex-1"
-                          >
-                            RLUSD
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <Label>Amount to Receive</Label>
-                        <Input
-                          type="number"
-                          value={sellForAmount}
-                          onChange={(e) => setSellForAmount(e.target.value)}
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Summary */}
-                    {sellAmount && sellForAmount && selectedSellToken && (
-                      <div className="p-4 bg-indigo-50 rounded-xl">
-                        <p className="text-sm text-indigo-800">
-                          <strong>Your offer:</strong> Sell {sellAmount} {selectedSellToken.currencyDisplay} for {sellForAmount} {sellForType}
+                    <div>
+                      <Label>Amount to Sell</Label>
+                      <Input
+                        type="number"
+                        value={sellAmount}
+                        onChange={(e) => setSellAmount(e.target.value)}
+                        placeholder="0.00"
+                      />
+                      {selectedSellToken && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Available: {parseFloat(selectedSellToken.balance).toLocaleString()} {selectedSellToken.currencyDisplay}
                         </p>
-                        <p className="text-xs text-indigo-600 mt-1">
-                          Rate: 1 {selectedSellToken.currencyDisplay} = {(parseFloat(sellForAmount) / parseFloat(sellAmount)).toFixed(4)} {sellForType}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Submit Button */}
-                    <Button 
-                      onClick={handleCreateSellOffer}
-                      disabled={creating || !sellToken || !sellAmount || !sellForAmount}
-                      className="w-full bg-red-600 hover:bg-red-700"
-                      size="lg"
-                    >
-                      {creating ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                          Creating Offer...
-                        </>
-                      ) : (
-                        <>
-                          <Tag className="w-4 h-4 mr-2" />
-                          Create Sell Offer
-                        </>
                       )}
-                    </Button>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                    </div>
+                  </div>
 
-          {/* BUY TAB */}
-          <TabsContent value="buy">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-green-600" />
-                  Create Buy Offer
-                </CardTitle>
-                <CardDescription>
-                  Buy RWA tokens with XRP or RLUSD
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {loading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                  {/* Arrow */}
+                  <div className="flex justify-center">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <ArrowLeftRight className="w-5 h-5 text-primary" />
+                    </div>
                   </div>
-                ) : marketplaceTokens.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500">
-                    <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                    <p>No tokens available in marketplace.</p>
-                    <p className="text-xs mt-2">Add tokens using "Add Token" in the RWA Marketplace</p>
-                    <Button 
-                      variant="outline" 
-                      className="mt-4"
-                      onClick={() => router.push("/rwa")}
-                    >
-                      Go to Marketplace
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    {/* What you want to buy */}
-                    <div className="p-4 bg-green-50 rounded-xl space-y-3">
-                      <h3 className="font-semibold text-green-800 flex items-center gap-2">
-                        <ShoppingCart className="w-4 h-4" />
-                        You Want to Buy
-                      </h3>
-                      
-                      <div>
-                        <Label>Select Token</Label>
-                        <select 
-                          value={buyToken}
-                          onChange={(e) => setBuyToken(e.target.value)}
-                          className="w-full p-2 border rounded-lg mt-1"
+
+                  {/* What you want to receive */}
+                  <div className="p-4 bg-success/10 rounded-xl space-y-3">
+                    <h3 className="font-semibold text-success flex items-center gap-2">
+                      <Coins className="w-4 h-4" />
+                      You Want to Receive
+                    </h3>
+                    
+                    <div>
+                      <Label>Currency</Label>
+                      <div className="flex gap-2 mt-1">
+                        <Button
+                          type="button"
+                          variant={sellForType === "XRP" ? "default" : "outline"}
+                          onClick={() => setSellForType("XRP")}
+                          className="flex-1"
                         >
-                          <option value="">Choose a token...</option>
-                          {marketplaceTokens.map((token) => (
-                            <option key={`${token.currency}-${token.issuer}`} value={`${token.currency}:${token.issuer}`}>
-                              {token.currencyDisplay} (by {token.issuer.slice(0, 8)}...)
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <Label>Amount to Buy</Label>
-                        <Input
-                          type="number"
-                          value={buyAmount}
-                          onChange={(e) => setBuyAmount(e.target.value)}
-                          placeholder="0.00"
-                        />
+                          XRP
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={sellForType === "RLUSD" ? "default" : "outline"}
+                          onClick={() => setSellForType("RLUSD")}
+                          className="flex-1"
+                        >
+                          RLUSD
+                        </Button>
                       </div>
                     </div>
 
-                    {/* Arrow */}
-                    <div className="flex justify-center">
-                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                        <ArrowLeftRight className="w-5 h-5 text-indigo-600" />
-                      </div>
+                    <div>
+                      <Label>Amount to Receive</Label>
+                      <Input
+                        type="number"
+                        value={sellForAmount}
+                        onChange={(e) => setSellForAmount(e.target.value)}
+                        placeholder="0.00"
+                      />
                     </div>
+                  </div>
 
-                    {/* What you're paying */}
-                    <div className="p-4 bg-red-50 rounded-xl space-y-3">
-                      <h3 className="font-semibold text-red-800 flex items-center gap-2">
-                        <Coins className="w-4 h-4" />
-                        You're Paying
-                      </h3>
-                      
-                      <div>
-                        <Label>Currency</Label>
-                        <div className="flex gap-2 mt-1">
-                          <Button
-                            type="button"
-                            variant={payWithType === "XRP" ? "default" : "outline"}
-                            onClick={() => setPayWithType("XRP")}
-                            className="flex-1"
-                          >
-                            XRP
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={payWithType === "RLUSD" ? "default" : "outline"}
-                            onClick={() => setPayWithType("RLUSD")}
-                            className="flex-1"
-                          >
-                            RLUSD
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <Label>Amount to Pay</Label>
-                        <Input
-                          type="number"
-                          value={payWithAmount}
-                          onChange={(e) => setPayWithAmount(e.target.value)}
-                          placeholder="0.00"
-                        />
-                      </div>
+                  {/* Summary */}
+                  {sellAmount && sellForAmount && selectedSellToken && (
+                    <div className="p-4 bg-primary/10 rounded-xl">
+                      <p className="text-sm text-primary">
+                        <strong>Your offer:</strong> Sell {sellAmount} {selectedSellToken.currencyDisplay} for {sellForAmount} {sellForType}
+                      </p>
+                      <p className="text-xs text-primary/80 mt-1">
+                        Rate: 1 {selectedSellToken.currencyDisplay} = {(parseFloat(sellForAmount) / parseFloat(sellAmount)).toFixed(4)} {sellForType}
+                      </p>
                     </div>
+                  )}
 
-                    {/* Summary */}
-                    {buyAmount && payWithAmount && selectedBuyToken && (
-                      <div className="p-4 bg-indigo-50 rounded-xl">
-                        <p className="text-sm text-indigo-800">
-                          <strong>Your offer:</strong> Buy {buyAmount} {selectedBuyToken.currencyDisplay} for {payWithAmount} {payWithType}
-                        </p>
-                        <p className="text-xs text-indigo-600 mt-1">
-                          Rate: 1 {selectedBuyToken.currencyDisplay} = {(parseFloat(payWithAmount) / parseFloat(buyAmount)).toFixed(4)} {payWithType}
-                        </p>
-                      </div>
+                  {/* Submit Button */}
+                  <Button 
+                    onClick={handleCreateSellOffer}
+                    disabled={creating || !sellToken || !sellAmount || !sellForAmount}
+                    className="w-full"
+                    variant="destructive"
+                    size="lg"
+                  >
+                    {creating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        Creating Offer...
+                      </>
+                    ) : (
+                      <>
+                        <Tag className="w-4 h-4 mr-2" />
+                        Create Sell Offer
+                      </>
                     )}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                    {/* Important Note */}
-                    <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
-                      <strong>Note:</strong> You need a trustline to the token before you can receive it.
-                      Create one in the RWA Marketplace → Token Details → "Create Trustline".
+        {/* BUY TAB */}
+        <TabsContent value="buy">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-success" />
+                Create Buy Offer
+              </CardTitle>
+              <CardDescription>
+                Buy RWA tokens with XRP or RLUSD
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                </div>
+              ) : marketplaceTokens.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+                  <p>No tokens available in marketplace.</p>
+                  <p className="text-xs mt-2">Add tokens using "Add Token" in the RWA Marketplace</p>
+                  <Button 
+                    variant="outline" 
+                    className="mt-4"
+                    onClick={() => router.push("/rwa")}
+                  >
+                    Go to Marketplace
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  {/* What you want to buy */}
+                  <div className="p-4 bg-success/10 rounded-xl space-y-3">
+                    <h3 className="font-semibold text-success flex items-center gap-2">
+                      <ShoppingCart className="w-4 h-4" />
+                      You Want to Buy
+                    </h3>
+                    
+                    <div>
+                      <Label>Select Token</Label>
+                      <select 
+                        value={buyToken}
+                        onChange={(e) => setBuyToken(e.target.value)}
+                        className="w-full p-2 border rounded-lg mt-1 bg-background"
+                      >
+                        <option value="">Choose a token...</option>
+                        {marketplaceTokens.map((token) => (
+                          <option key={`${token.currency}-${token.issuer}`} value={`${token.currency}:${token.issuer}`}>
+                            {token.currencyDisplay} (by {token.issuer.slice(0, 8)}...)
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
-                    {/* Submit Button */}
-                    <Button 
-                      onClick={handleCreateBuyOffer}
-                      disabled={creating || !buyToken || !buyAmount || !payWithAmount}
-                      className="w-full bg-green-600 hover:bg-green-700"
-                      size="lg"
-                    >
-                      {creating ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                          Creating Offer...
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingCart className="w-4 h-4 mr-2" />
-                          Create Buy Offer
-                        </>
-                      )}
-                    </Button>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                    <div>
+                      <Label>Amount to Buy</Label>
+                      <Input
+                        type="number"
+                        value={buyAmount}
+                        onChange={(e) => setBuyAmount(e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
 
-        {/* Info Card */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="text-lg">How DEX Trading Works</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-slate-600 space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 bg-red-50 rounded-lg">
-                <p className="font-semibold text-red-800 mb-1">🏷️ Seller</p>
-                <p className="text-xs text-red-700">Posts: "Selling X tokens for Y XRP"</p>
-              </div>
-              <div className="p-3 bg-green-50 rounded-lg">
-                <p className="font-semibold text-green-800 mb-1">🛒 Buyer</p>
-                <p className="text-xs text-green-700">Posts: "Buying X tokens for Y XRP"</p>
-              </div>
+                  {/* Arrow */}
+                  <div className="flex justify-center">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <ArrowLeftRight className="w-5 h-5 text-primary" />
+                    </div>
+                  </div>
+
+                  {/* What you're paying */}
+                  <div className="p-4 bg-destructive/10 rounded-xl space-y-3">
+                    <h3 className="font-semibold text-destructive flex items-center gap-2">
+                      <Coins className="w-4 h-4" />
+                      You're Paying
+                    </h3>
+                    
+                    <div>
+                      <Label>Currency</Label>
+                      <div className="flex gap-2 mt-1">
+                        <Button
+                          type="button"
+                          variant={payWithType === "XRP" ? "default" : "outline"}
+                          onClick={() => setPayWithType("XRP")}
+                          className="flex-1"
+                        >
+                          XRP
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={payWithType === "RLUSD" ? "default" : "outline"}
+                          onClick={() => setPayWithType("RLUSD")}
+                          className="flex-1"
+                        >
+                          RLUSD
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label>Amount to Pay</Label>
+                      <Input
+                        type="number"
+                        value={payWithAmount}
+                        onChange={(e) => setPayWithAmount(e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  {buyAmount && payWithAmount && selectedBuyToken && (
+                    <div className="p-4 bg-primary/10 rounded-xl">
+                      <p className="text-sm text-primary">
+                        <strong>Your offer:</strong> Buy {buyAmount} {selectedBuyToken.currencyDisplay} for {payWithAmount} {payWithType}
+                      </p>
+                      <p className="text-xs text-primary/80 mt-1">
+                        Rate: 1 {selectedBuyToken.currencyDisplay} = {(parseFloat(payWithAmount) / parseFloat(buyAmount)).toFixed(4)} {payWithType}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Important Note */}
+                  <div className="p-3 bg-info/10 rounded-lg text-sm text-info">
+                    <strong>Note:</strong> You need a trustline to the token before you can receive it.
+                    Create one in the RWA Marketplace → Token Details → "Create Trustline".
+                  </div>
+
+                  {/* Submit Button */}
+                  <Button 
+                    onClick={handleCreateBuyOffer}
+                    disabled={creating || !buyToken || !buyAmount || !payWithAmount}
+                    className="w-full"
+                    variant="success"
+                    size="lg"
+                  >
+                    {creating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        Creating Offer...
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="w-4 h-4 mr-2" />
+                        Create Buy Offer
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Info Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">How DEX Trading Works</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-3">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-destructive/10 rounded-lg">
+              <p className="font-semibold text-destructive mb-1">🏷️ Seller</p>
+              <p className="text-xs text-destructive/80">Posts: "Selling X tokens for Y XRP"</p>
             </div>
-            <p className="text-center py-2">⬇️ When prices match ⬇️</p>
-            <div className="p-3 bg-indigo-50 rounded-lg text-center">
-              <p className="font-semibold text-indigo-800">🔄 Atomic Swap!</p>
-              <p className="text-xs text-indigo-700">Trade executes instantly, no middleman</p>
+            <div className="p-3 bg-success/10 rounded-lg">
+              <p className="font-semibold text-success mb-1">🛒 Buyer</p>
+              <p className="text-xs text-success/80">Posts: "Buying X tokens for Y XRP"</p>
             </div>
-          </CardContent>
-        </Card>
-      </main>
+          </div>
+          <p className="text-center py-2">⬇️ When prices match ⬇️</p>
+          <div className="p-3 bg-primary/10 rounded-lg text-center">
+            <p className="font-semibold text-primary">🔄 Atomic Swap!</p>
+            <p className="text-xs text-primary/80">Trade executes instantly, no middleman</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

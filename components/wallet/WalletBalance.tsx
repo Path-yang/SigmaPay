@@ -81,7 +81,7 @@ export function WalletBalance() {
     return (
         <div className="space-y-4">
             {/* Wallet Address Card */}
-            <Card className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 border-0 text-white overflow-hidden relative">
+            <Card className="bg-gradient-to-br from-primary via-primary/90 to-primary/80 border-0 text-white overflow-hidden relative">
                 <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
                 <CardContent className="p-6 relative">
                     <div className="flex items-center justify-between">

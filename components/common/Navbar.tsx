@@ -47,7 +47,7 @@ export function Navbar() {
             <nav className="hidden md:flex fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200/50">
                 <div className="max-w-6xl mx-auto w-full px-6 h-16 flex items-center justify-between">
                     <Link href="/dashboard" className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                             <span className="text-white font-bold text-sm">Σ</span>
                         </div>
                         <span className="font-bold text-xl text-slate-900">SigmaPay</span>
@@ -106,7 +106,7 @@ export function Navbar() {
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${isActive ? "text-indigo-600" : "text-slate-400"
+                                className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${isActive ? "text-primary" : "text-slate-400"
                                     }`}
                             >
                                 <Icon className="w-5 h-5" />

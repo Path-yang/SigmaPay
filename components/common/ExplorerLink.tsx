@@ -20,7 +20,7 @@ export function ExplorerLink({ type, value, label, className = "" }: ExplorerLin
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className={`inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-700 transition-colors ${className}`}
+            className={`inline-flex items-center gap-1 text-primary hover:text-primary/80 transition-colors ${className}`}
         >
             {displayLabel}
             <ExternalLink className="w-3 h-3" />

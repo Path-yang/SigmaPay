@@ -270,7 +270,7 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-indigo-600" />
+            <Sparkles className="w-5 h-5 text-primary" />
             Tokenize an Asset
           </CardTitle>
           <CardDescription>
@@ -285,9 +285,9 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
                 <button
                   key={cat.value}
                   onClick={() => handleCategorySelect(cat.value)}
-                  className="p-4 rounded-xl border-2 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition-all text-left"
+                  className="p-4 rounded-xl border-2 border-slate-200 hover:border-primary/50 hover:bg-primary/5 transition-all text-left"
                 >
-                  <Icon className="w-6 h-6 text-indigo-600 mb-2" />
+                  <Icon className="w-6 h-6 text-primary mb-2" />
                   <p className="font-semibold text-sm">{cat.label}</p>
                   <p className="text-xs text-slate-500">{cat.description}</p>
                 </button>
@@ -307,7 +307,7 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
     return (
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2 text-sm text-indigo-600 mb-2">
+          <div className="flex items-center gap-2 text-sm text-primary mb-2">
             <CategoryIcon className="w-4 h-4" />
             <span>{selectedCategory?.label}</span>
           </div>
@@ -467,7 +467,7 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
           </div>
 
           <div className="space-y-2">
-            <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-700">
+            <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-sm text-primary">
               <strong>Note:</strong> This will create an on-chain token on XRP Ledger Testnet. 
               A small XRP fee (~0.00001 XRP) will be charged.
             </div>
@@ -552,7 +552,7 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
                   href={`https://testnet.xrpl.org/transactions/${resultHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-indigo-600 hover:underline"
+                  className="text-sm text-primary hover:underline"
                 >
                   View on XRPL Explorer →
                 </a>

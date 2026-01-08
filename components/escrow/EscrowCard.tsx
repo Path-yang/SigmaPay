@@ -91,7 +91,7 @@ export function EscrowCard({
 
   // Get card gradient based on type
   const cardGradient = type === "sent" 
-    ? "from-indigo-50 to-purple-50 border-indigo-200"
+    ? "from-primary/10 to-primary/5 border-primary/30"
     : "from-emerald-50 to-teal-50 border-emerald-200";
 
   return (
@@ -101,15 +101,15 @@ export function EscrowCard({
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              type === "sent" ? "bg-indigo-100" : "bg-emerald-100"
+              type === "sent" ? "bg-primary/20" : "bg-emerald-100"
             }`}>
               <Coins className={`w-5 h-5 ${
-                type === "sent" ? "text-indigo-600" : "text-emerald-600"
+                type === "sent" ? "text-primary" : "text-emerald-600"
               }`} />
             </div>
             <div>
               <p className={`text-lg font-bold ${
-                type === "sent" ? "text-indigo-900" : "text-emerald-900"
+                type === "sent" ? "text-primary" : "text-emerald-900"
               }`}>
                 {formatAmount(escrow.amount)} XRP
               </p>

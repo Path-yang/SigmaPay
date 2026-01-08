@@ -1,61 +1,61 @@
 "use client";
 
-import { useWallet } from "@/components/wallet/WalletProvider";
 import { ReceiveAddress } from "@/components/receive/ReceiveAddress";
 import { ChecksList } from "@/components/receive/ChecksList";
-import { WalletUnlock } from "@/components/wallet/WalletUnlock";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Info, QrCode, FileCheck } from "lucide-react";
 
 export default function ReceivePage() {
-    const { wallet, hasWallet } = useWallet();
-
-    // Redirect to dashboard if no wallet
-    if (!hasWallet) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4">
-                <div className="text-center">
-                    <h2 className="text-xl font-bold mb-4">No Wallet Found</h2>
-                    <p className="text-slate-500 mb-6">Create or import a wallet to continue</p>
-                    <Link href="/dashboard">
-                        <Button>Go to Dashboard</Button>
-                    </Link>
-                </div>
-            </div>
-        );
-    }
-
-    // Show unlock if wallet is locked
-    if (!wallet) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4">
-                <WalletUnlock />
-            </div>
-        );
-    }
-
     return (
-        <div className="min-h-screen pb-24 md:pb-8">
-            <div className="max-w-lg mx-auto px-4 py-8">
-                {/* Header */}
-                <div className="flex items-center gap-4 mb-6">
-                    <Link href="/dashboard">
-                        <Button variant="ghost" size="icon">
-                            <ArrowLeft className="w-5 h-5" />
-                        </Button>
-                    </Link>
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900">Receive</h1>
-                        <p className="text-slate-500">Receive payments and claim checks</p>
+        <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
+            {/* Info Banner */}
+            <Card className="bg-chart-2/5 border-chart-2/20">
+                <CardContent className="p-4">
+                    <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-chart-2/10 flex items-center justify-center flex-shrink-0">
+                            <Info className="w-5 h-5 text-chart-2" />
+                        </div>
+                        <div>
+                            <h3 className="font-semibold text-foreground">Receive Payments</h3>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                                Share your wallet address or QR code to receive RLUSD from anyone.
+                            </p>
+                        </div>
                     </div>
-                </div>
+                </CardContent>
+            </Card>
 
-                <div className="space-y-6">
-                    <ReceiveAddress />
-                    <ChecksList />
-                </div>
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 gap-4">
+                <Card>
+                    <CardContent className="p-4 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                            <QrCode className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-foreground">QR Code</p>
+                            <p className="text-xs text-muted-foreground">Share to receive</p>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-4 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-chart-4/10 flex items-center justify-center">
+                            <FileCheck className="w-5 h-5 text-chart-4" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-foreground">Checks</p>
+                            <p className="text-xs text-muted-foreground">Pending claims</p>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
+
+            {/* Receive Address with QR */}
+            <ReceiveAddress />
+
+            {/* Pending Checks */}
+            <ChecksList />
         </div>
     );
 }

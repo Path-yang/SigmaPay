@@ -205,7 +205,7 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
               <Card>
                 <CardContent className="pt-4">
                   <p className="text-xs text-slate-500 mb-1">Your Balance</p>
-                  <p className="text-xl font-bold text-indigo-600">{parseFloat(token.balance).toLocaleString()}</p>
+                  <p className="text-xl font-bold text-primary">{parseFloat(token.balance).toLocaleString()}</p>
                 </CardContent>
               </Card>
             )}
@@ -237,7 +237,7 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
               )}
               {token.metadata?.issuerName && (
                 <div className="flex items-center gap-3">
-                  <User className="w-5 h-5 text-indigo-500" />
+                  <User className="w-5 h-5 text-primary" />
                   <div>
                     <p className="text-sm font-medium text-slate-700">Issuer</p>
                     <p className="text-slate-600">{token.metadata.issuerName}</p>
@@ -274,7 +274,7 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
                     href={getExplorerAccountLink(token.issuer)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-indigo-600 hover:underline text-sm flex items-center gap-1"
+                    className="text-primary hover:underline text-sm flex items-center gap-1"
                   >
                     View on Explorer
                     <ExternalLink className="w-4 h-4" />
@@ -286,10 +286,10 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
 
           {/* Actions */}
           {!isOwnToken && (
-            <Card className="border-indigo-200 bg-indigo-50">
+            <Card className="border-primary/30 bg-primary/10">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-indigo-600" />
+                  <Globe className="w-5 h-5 text-primary" />
                   Receive This Token
                 </CardTitle>
                 <CardDescription>

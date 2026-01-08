@@ -229,7 +229,7 @@ export function SendForm() {
         return (
             <Card>
                 <CardContent className="p-8 text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-4" />
+                    <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
                     <p className="text-slate-500">Loading...</p>
                 </CardContent>
             </Card>
@@ -345,7 +345,7 @@ export function SendForm() {
                         <div key={s} className="flex items-center flex-1">
                             <div
                                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${step === s
-                                        ? "bg-indigo-600 text-white"
+                                        ? "bg-primary text-white"
                                         : ["amount", "recipient", "message", "confirm"].indexOf(step) > i
                                             ? "bg-emerald-500 text-white"
                                             : "bg-slate-100 text-slate-400"
@@ -559,8 +559,8 @@ export function SendForm() {
                             )}
                         </div>
 
-                        <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
-                            <p className="text-sm text-indigo-700">
+                        <div className="p-4 bg-primary/10 border border-primary/20 rounded-xl">
+                            <p className="text-sm text-primary">
                                 <strong>Network Fee:</strong> ~0.00001 XRP (negligible)
                             </p>
                         </div>
