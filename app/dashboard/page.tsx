@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VerificationLevel, getLimitDisplay } from "@/lib/xrpl/constants";
 import Link from "next/link";
-import { Send, Inbox, Clock, ArrowRight, Shield, ShieldCheck } from "lucide-react";
+import { Send, Inbox, Clock, ArrowRight, Shield, ShieldCheck, Lock } from "lucide-react";
 
 export default function DashboardPage() {
     const { 
@@ -98,36 +98,47 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-4 gap-3 mb-6">
                     <Link href="/send">
                         <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
-                            <CardContent className="p-4 text-center">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto mb-3">
-                                    <Send className="w-5 h-5 text-white" />
+                            <CardContent className="p-3 text-center">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto mb-2">
+                                    <Send className="w-4 h-4 text-white" />
                                 </div>
-                                <p className="font-medium text-slate-900">Send</p>
+                                <p className="font-medium text-slate-900 text-sm">Send</p>
                             </CardContent>
                         </Card>
                     </Link>
 
                     <Link href="/receive">
                         <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
-                            <CardContent className="p-4 text-center">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mx-auto mb-3">
-                                    <Inbox className="w-5 h-5 text-white" />
+                            <CardContent className="p-3 text-center">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mx-auto mb-2">
+                                    <Inbox className="w-4 h-4 text-white" />
                                 </div>
-                                <p className="font-medium text-slate-900">Receive</p>
+                                <p className="font-medium text-slate-900 text-sm">Receive</p>
+                            </CardContent>
+                        </Card>
+                    </Link>
+
+                    <Link href="/escrow">
+                        <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
+                            <CardContent className="p-3 text-center">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mx-auto mb-2">
+                                    <Lock className="w-4 h-4 text-white" />
+                                </div>
+                                <p className="font-medium text-slate-900 text-sm">Escrow</p>
                             </CardContent>
                         </Card>
                     </Link>
 
                     <Link href="/history">
                         <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
-                            <CardContent className="p-4 text-center">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-pink-600 flex items-center justify-center mx-auto mb-3">
-                                    <Clock className="w-5 h-5 text-white" />
+                            <CardContent className="p-3 text-center">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center mx-auto mb-2">
+                                    <Clock className="w-4 h-4 text-white" />
                                 </div>
-                                <p className="font-medium text-slate-900">History</p>
+                                <p className="font-medium text-slate-900 text-sm">History</p>
                             </CardContent>
                         </Card>
                     </Link>

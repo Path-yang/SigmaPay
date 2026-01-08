@@ -29,3 +29,31 @@ export interface CheckInfo {
 }
 
 export type SendMethod = "direct" | "check";
+
+// Escrow Types
+export type EscrowStatus = "pending" | "claimable" | "cancellable" | "completed" | "cancelled";
+export type EscrowReleaseType = "time" | "condition" | "both";
+
+export interface EscrowInfo {
+    index: string;
+    owner: string;
+    destination: string;
+    amount: string;
+    sequence: number;
+    finishAfter?: number;
+    cancelAfter?: number;
+    condition?: string;
+    status: EscrowStatus;
+    memo?: string;
+    fulfillment?: string; // Only for sender's view
+    createdAt?: number;
+}
+
+export interface CreateEscrowParams {
+    destination: string;
+    amount: string;
+    releaseType: EscrowReleaseType;
+    finishAfter?: Date;
+    cancelAfter?: Date;
+    memo?: string;
+}
