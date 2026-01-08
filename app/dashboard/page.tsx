@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { VerificationLevel, getLimitDisplay } from "@/lib/xrpl/constants";
 import Link from "next/link";
 import { Send, Inbox, Clock, ArrowRight, Shield, ShieldCheck, Lock } from "lucide-react";
+import { XRPPriceChart } from "@/components/dashboard/XRPPriceChart";
 
 export default function DashboardPage() {
     const { 
@@ -143,6 +144,9 @@ export default function DashboardPage() {
                         </Card>
                     </Link>
                 </div>
+
+                {/* Live XRP Price Chart */}
+                <XRPPriceChart />
 
                 {/* DID Status Card */}
                 <div className="mb-6">
