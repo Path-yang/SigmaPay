@@ -1112,6 +1112,41 @@ function getIssuedRWATokens(issuer: string): RWAToken[] {
 }
 
 /**
+ * Remove a token from the marketplace (localStorage)
+ */
+export function removeTokenFromMarketplace(currency: string, issuer: string): boolean {
+  if (typeof window === "undefined") return false;
+  
+  try {
+    const stored = localStorage.getItem(RWA_STORAGE_KEY);
+    if (!stored) return false;
+    
+    const tokens: Record<string, RWAToken[]> = JSON.parse(stored);
+    
+    // Check if issuer has tokens
+    if (!tokens[issuer]) return false;
+    
+    // Filter out the token to remove
+    const originalLength = tokens[issuer].length;
+    tokens[issuer] = tokens[issuer].filter(t => t.currency !== currency);
+    
+    // If issuer has no more tokens, remove the issuer key
+    if (tokens[issuer].length === 0) {
+      delete tokens[issuer];
+    }
+    
+    // Save back to localStorage
+    localStorage.setItem(RWA_STORAGE_KEY, JSON.stringify(tokens));
+    
+    console.log(`[removeTokenFromMarketplace] Removed token ${currency} from issuer ${issuer}`);
+    return tokens[issuer]?.length !== originalLength || originalLength > 0;
+  } catch (error) {
+    console.error("Failed to remove token from marketplace:", error);
+    return false;
+  }
+}
+
+/**
  * Debug function to check what's stored in localStorage
  * Call this from browser console: window.debugRWATokens()
  */

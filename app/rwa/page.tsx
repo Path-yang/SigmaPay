@@ -400,6 +400,11 @@ export default function RWAPage() {
               }, 2000);
             }
           }}
+          onTokenRemoved={() => {
+            // Refresh marketplace tokens after removal
+            const updatedMarketplace = getAllMarketplaceTokens();
+            setMarketplaceTokens(updatedMarketplace.length > 0 ? updatedMarketplace : DEMO_RWA_TOKENS);
+          }}
         />
       )}
 

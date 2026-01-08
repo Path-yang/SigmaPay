@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { RWAToken, RWACategory, createRWATrustline } from "@/lib/xrpl/rwa";
+import { RWAToken, RWACategory, createRWATrustline, removeTokenFromMarketplace } from "@/lib/xrpl/rwa";
 import { useWallet } from "@/components/wallet/WalletProvider";
 import { toast } from "@/components/ui/use-toast";
 import { getExplorerAccountLink } from "@/lib/xrpl/constants";
@@ -25,7 +25,8 @@ import {
   CheckCircle,
   Loader2,
   Shield,
-  Globe
+  Globe,
+  Trash2
 } from "lucide-react";
 
 interface TokenDetailsModalProps {
@@ -33,6 +34,7 @@ interface TokenDetailsModalProps {
   open: boolean;
   onClose: () => void;
   onTrustlineCreated?: () => void;
+  onTokenRemoved?: () => void;
 }
 
 const categoryConfig: Record<RWACategory, { icon: typeof Building2; color: string; label: string }> = {
@@ -46,10 +48,11 @@ const categoryConfig: Record<RWACategory, { icon: typeof Building2; color: strin
   [RWACategory.OTHER]: { icon: Package, color: "bg-gray-100 text-gray-700", label: "Other" },
 };
 
-export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: TokenDetailsModalProps) {
+export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated, onTokenRemoved }: TokenDetailsModalProps) {
   const { wallet, address } = useWallet();
   const [creatingTrustline, setCreatingTrustline] = useState(false);
   const [hasTrustline, setHasTrustline] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   // Safety check for token - return early if no token
   if (!token || !open) {
@@ -126,6 +129,37 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
       });
     } finally {
       setCreatingTrustline(false);
+    }
+  };
+
+  const handleRemoveToken = () => {
+    if (!token) return;
+    
+    setRemoving(true);
+    try {
+      const success = removeTokenFromMarketplace(token.currency, token.issuer);
+      if (success) {
+        toast({
+          title: "Token Removed",
+          description: "The token has been removed from your marketplace.",
+        });
+        onTokenRemoved?.();
+        onClose();
+      } else {
+        toast({
+          title: "Failed to Remove",
+          description: "Could not remove the token. It may not exist in your marketplace.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to remove token from marketplace.",
+        variant: "destructive",
+      });
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -341,6 +375,22 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
         </div>
 
         <div className="flex gap-2 pt-4">
+          {/* Remove from Marketplace button - only show for non-demo tokens that user doesn't own */}
+          {token.issuer !== "demo" && !isOwnToken && (
+            <Button
+              variant="destructive"
+              onClick={handleRemoveToken}
+              disabled={removing}
+              size="sm"
+            >
+              {removing ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Remove
+            </Button>
+          )}
           <Button variant="outline" onClick={onClose} className="flex-1">
             Close
           </Button>
