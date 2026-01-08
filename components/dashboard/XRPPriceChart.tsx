@@ -14,12 +14,19 @@ interface PriceData {
 }
 
 type TimeRange = "1D" | "7D" | "1M" | "3M" | "1Y";
+type Currency = "usd" | "sgd";
+
+const CURRENCY_SYMBOLS: Record<Currency, string> = {
+  usd: "$",
+  sgd: "S$",
+};
 
 export function XRPPriceChart() {
   const [priceData, setPriceData] = useState<PriceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>("7D");
+  const [currency, setCurrency] = useState<Currency>("usd");
 
   const fetchPrice = useCallback(async () => {
     try {
@@ -36,14 +43,14 @@ export function XRPPriceChart() {
       };
       const days = daysMap[timeRange];
       
-      // Fetch current price data
+      // Fetch current price data with selected currency
       const priceResponse = await fetch(
-        "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd&include_24hr_change=true"
+        `https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=${currency}&include_24hr_change=true`
       );
       
-      // Fetch historical data for chart
+      // Fetch historical data for chart with selected currency
       const chartResponse = await fetch(
-        `https://api.coingecko.com/api/v3/coins/ripple/market_chart?vs_currency=usd&days=${days}`
+        `https://api.coingecko.com/api/v3/coins/ripple/market_chart?vs_currency=${currency}&days=${days}`
       );
       
       if (!priceResponse.ok || !chartResponse.ok) {
@@ -54,7 +61,7 @@ export function XRPPriceChart() {
       const chartData = await chartResponse.json();
       
       const prices = chartData.prices.map((p: [number, number]) => p[1]);
-      const currentPrice = priceDataResult.ripple.usd;
+      const currentPrice = priceDataResult.ripple[currency];
       const firstPrice = prices[0] || currentPrice;
       const change = currentPrice - firstPrice;
       const changePercent = (change / firstPrice) * 100;
@@ -73,7 +80,7 @@ export function XRPPriceChart() {
     } finally {
       setLoading(false);
     }
-  }, [timeRange]);
+  }, [timeRange, currency]);
 
   useEffect(() => {
     fetchPrice();
@@ -82,6 +89,7 @@ export function XRPPriceChart() {
   }, [fetchPrice]);
 
   const isPositive = priceData?.changePercent && priceData.changePercent >= 0;
+  const currencySymbol = CURRENCY_SYMBOLS[currency];
 
   // Render the chart
   const renderChart = () => {
@@ -134,8 +142,8 @@ export function XRPPriceChart() {
         </svg>
         {/* Price labels on right side */}
         <div className="absolute right-0 top-0 bottom-0 flex flex-col justify-between py-2 text-xs text-muted-foreground">
-          <span>${max.toFixed(3)}</span>
-          <span>${min.toFixed(3)}</span>
+          <span>{currencySymbol}{max.toFixed(3)}</span>
+          <span>{currencySymbol}{min.toFixed(3)}</span>
         </div>
       </div>
     );
@@ -187,10 +195,35 @@ export function XRPPriceChart() {
       <CardContent className="p-6">
         {/* Header */}
         <div className="mb-4">
-          <p className="text-sm text-muted-foreground mb-1">XRP / USD</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm text-muted-foreground">XRP / {currency.toUpperCase()}</p>
+            {/* Currency Toggle */}
+            <div className="flex bg-muted rounded-lg p-0.5">
+              <button
+                onClick={() => setCurrency("usd")}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  currency === "usd"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                USD
+              </button>
+              <button
+                onClick={() => setCurrency("sgd")}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  currency === "sgd"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                SGD
+              </button>
+            </div>
+          </div>
           <div className="flex items-baseline gap-3">
             <span className="text-4xl font-bold text-foreground">
-              ${priceData?.current?.toFixed(4) || "0.0000"}
+              {currencySymbol}{priceData?.current?.toFixed(4) || "0.0000"}
             </span>
             <span className={`flex items-center text-lg font-medium ${isPositive ? "text-success" : "text-destructive"}`}>
               {isPositive ? <TrendingUp className="w-4 h-4 mr-1" /> : <TrendingDown className="w-4 h-4 mr-1" />}
@@ -198,7 +231,7 @@ export function XRPPriceChart() {
             </span>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {isPositive ? "+" : ""}${priceData?.change?.toFixed(4)} {timeRange}
+            {isPositive ? "+" : ""}{currencySymbol}{priceData?.change?.toFixed(4)} {timeRange}
           </p>
         </div>
 
@@ -228,11 +261,11 @@ export function XRPPriceChart() {
         <div className="flex items-center gap-8 mt-4 pt-4 border-t border-border">
           <div>
             <p className="text-sm text-muted-foreground">High</p>
-            <p className="text-lg font-semibold text-success">${priceData?.high?.toFixed(4)}</p>
+            <p className="text-lg font-semibold text-success">{currencySymbol}{priceData?.high?.toFixed(4)}</p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Low</p>
-            <p className="text-lg font-semibold text-destructive">${priceData?.low?.toFixed(4)}</p>
+            <p className="text-lg font-semibold text-destructive">{currencySymbol}{priceData?.low?.toFixed(4)}</p>
           </div>
           <div className="ml-auto">
             <p className="text-sm text-muted-foreground">Volume</p>
