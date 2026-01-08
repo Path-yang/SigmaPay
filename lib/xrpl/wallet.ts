@@ -25,18 +25,24 @@ export function importWallet(seedOrMnemonic: string): WalletInfo {
     
     try {
         let wallet: Wallet;
+        let seedToStore: string;
         
         if (isMnemonic) {
             // Import from mnemonic phrase (12/24 words)
-            wallet = Wallet.fromMnemonic(input);
+            // Normalize the mnemonic (lowercase, single spaces)
+            const normalizedMnemonic = words.map(w => w.toLowerCase()).join(' ');
+            wallet = Wallet.fromMnemonic(normalizedMnemonic);
+            // Store the mnemonic since wallet.seed is undefined for mnemonic-derived wallets
+            seedToStore = normalizedMnemonic;
         } else {
             // Import from secret seed (starts with 's')
             wallet = Wallet.fromSeed(input);
+            seedToStore = wallet.seed!;
         }
         
         return {
             address: wallet.classicAddress,
-            seed: wallet.seed!,
+            seed: seedToStore,
             publicKey: wallet.publicKey,
         };
     } catch (error) {
