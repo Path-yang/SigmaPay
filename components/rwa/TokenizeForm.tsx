@@ -71,11 +71,22 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
       return;
     }
 
+    // Validate symbol - prevent XRP
+    const tokenSymbol = symbol || name.substring(0, 5).toUpperCase();
+    if (tokenSymbol === "XRP" || tokenSymbol.startsWith("XRP")) {
+      toast({
+        title: "Invalid Token Symbol",
+        description: "Cannot use 'XRP' as token symbol. XRP is the native currency. Please choose a different symbol.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      console.log("Starting tokenization:", { name, symbol, category, totalSupply });
+      console.log("Starting tokenization:", { name, symbol: tokenSymbol, category, totalSupply });
       
-      const result = await issueRWAToken(wallet, symbol || name.substring(0, 5).toUpperCase(), {
+      const result = await issueRWAToken(wallet, tokenSymbol, {
         name,
         description,
         category,
@@ -90,28 +101,30 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
       console.log("Tokenization result:", result);
 
       if (result.success) {
-        setResultCurrency(result.currency || symbol);
+        setResultCurrency(result.currency || tokenSymbol);
         setResultHash(result.hash || "");
         setStep("success");
-        toast({ title: "Asset Tokenized!", description: `Created ${name} (${symbol})`, variant: "success" });
+        toast({ title: "Asset Tokenized!", description: `Created ${name} (${tokenSymbol})`, variant: "success" });
         onSuccess?.(result.currency || "", result.hash);
       } else {
         const errorMsg = result.error || "Unknown error occurred";
         console.error("Tokenization failed:", errorMsg);
         toast({ 
           title: "Tokenization Failed", 
-          description: errorMsg + ". Check console for details.",
+          description: errorMsg,
           variant: "destructive" 
         });
+        // Reset loading state on failure
+        setLoading(false);
       }
     } catch (error) {
       console.error("Tokenization error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to tokenize asset";
       toast({ 
         title: "Error", 
-        description: error instanceof Error ? error.message : "Failed to tokenize asset. Check console for details.", 
+        description: errorMessage,
         variant: "destructive" 
       });
-    } finally {
       setLoading(false);
     }
   };
@@ -219,11 +232,18 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
               <Input
                 id="symbol"
                 value={symbol}
-                onChange={(e) => setSymbol(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 8))}
+                onChange={(e) => {
+                  let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 8);
+                  // Prevent XRP
+                  if (value === "XRP" || value.startsWith("XRP")) {
+                    value = value.replace(/^XRP/, "");
+                  }
+                  setSymbol(value);
+                }}
                 placeholder="e.g., MAPT1"
                 maxLength={8}
               />
-              <p className="text-xs text-slate-500 mt-1">3-8 characters</p>
+              <p className="text-xs text-slate-500 mt-1">3-8 characters (cannot be XRP)</p>
             </div>
 
             <div>

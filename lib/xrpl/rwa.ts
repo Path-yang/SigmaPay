@@ -8,7 +8,7 @@
  * - Metadata: Stored in transaction memos
  */
 
-import { Payment, TrustSet } from "xrpl";
+import { Payment, TrustSet, xrpToDrops } from "xrpl";
 import { getClient } from "./client";
 import { VerificationLevel } from "./constants";
 import { getVerificationLevel } from "./did";
@@ -153,7 +153,16 @@ export async function issueRWAToken(
   currencyName: string,
   metadata: RWAMetadata
 ): Promise<RWAIssuanceResult> {
-  const MAX_RETRIES = 2;
+  // Prevent creating XRP tokens - XRP is native and cannot be created
+  const upperName = currencyName.toUpperCase().trim();
+  if (upperName === "XRP" || upperName === "XRPX" || upperName.startsWith("XRP")) {
+    return {
+      success: false,
+      error: "Cannot create XRP tokens. XRP is the native currency. Please use a different token symbol for your RWA.",
+    };
+  }
+
+  const MAX_RETRIES = 1; // Reduced to prevent infinite retries
   let lastError = "";
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -184,13 +193,15 @@ export async function issueRWAToken(
       // Recipients will create trustlines to the issuer
       // We'll record the issuance via a self-payment with metadata
 
-      // Create a "registration" transaction - payment to self with 0 value
+      // Create a "registration" transaction - payment to self with minimal XRP
       // This records the RWA creation on-chain with metadata
+      // Note: This doesn't create IOU tokens - tokens are created when sent to recipients
+      // Use minimal amount in drops (10 drops = 0.00001 XRP)
       const registration: Payment = {
         TransactionType: "Payment",
         Account: wallet.classicAddress,
         Destination: wallet.classicAddress,
-        Amount: "1", // Minimal XRP to self (will be returned minus fee)
+        Amount: xrpToDrops("0.00001"), // Convert to drops (10 drops)
         Memos: metadataToMemo({
           ...metadata,
           createdAt: new Date().toISOString(),
@@ -241,37 +252,43 @@ export async function issueRWAToken(
 
       const errorMsg = txResult.meta?.TransactionResult || "Failed to issue RWA token";
       console.error("❌ RWA token creation failed:", errorMsg);
-      lastError = errorMsg;
       
-      // Don't retry on certain errors
-      if (errorMsg.includes("tecUNFUNDED") || errorMsg.includes("temBAD")) {
-        return { success: false, error: errorMsg };
+      // Provide user-friendly error messages
+      let userError = errorMsg;
+      if (errorMsg.includes("tecUNFUNDED")) {
+        userError = "Insufficient XRP balance. You need XRP to pay transaction fees.";
+      } else if (errorMsg.includes("temBAD")) {
+        userError = "Invalid transaction parameters. Please check your input.";
+      } else if (errorMsg.includes("tecNO_DST")) {
+        userError = "Destination account issue. Please try again.";
+      } else if (errorMsg.includes("tefPAST_SEQ")) {
+        userError = "Transaction sequence error. Please try again.";
       }
-      
-      // Retry on timeout errors
-      if (attempt < MAX_RETRIES && (errorMsg.includes("temREDUNDANT") || errorMsg.includes("tefPAST_SEQ"))) {
-        console.log(`⏳ Transaction timed out, retrying in 2 seconds...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        continue;
-      }
-      
-      return { success: false, error: errorMsg };
+
+      return { success: false, error: userError };
     } catch (error) {
       console.error(`❌ RWA issuance error (attempt ${attempt}):`, error);
-      lastError = error instanceof Error ? error.message : "Failed to issue RWA token";
+      const errorMessage = error instanceof Error ? error.message : "Failed to issue RWA token";
       
-      // Retry on network errors
-      if (attempt < MAX_RETRIES) {
-        console.log(`⏳ Retrying in 2 seconds...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        continue;
+      // Don't retry on most errors - fail fast
+      if (errorMessage.includes("timeout") || errorMessage.includes("network")) {
+        if (attempt < MAX_RETRIES) {
+          console.log(`⏳ Network error, retrying in 2 seconds...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          continue;
+        }
       }
+      
+      return {
+        success: false,
+        error: errorMessage,
+      };
     }
   }
 
   return {
     success: false,
-    error: `Failed after ${MAX_RETRIES} attempts. Last error: ${lastError}`,
+    error: lastError || "Failed to issue RWA token. Please check your wallet balance and try again.",
   };
 }
 
