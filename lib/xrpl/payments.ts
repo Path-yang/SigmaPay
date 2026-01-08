@@ -1,4 +1,4 @@
-import { Payment } from "xrpl";
+import { Payment, xrpToDrops } from "xrpl";
 import { getClient } from "./client";
 import { RLUSD_ISSUER, RLUSD_CURRENCY } from "./constants";
 import { canSendAmount } from "./did";
@@ -16,6 +16,61 @@ export interface PaymentResult {
   method: "direct" | "check";
   hash?: string;
   error?: string;
+}
+
+/**
+ * Send XRP payment directly
+ */
+export async function sendXRPPayment({
+  wallet,
+  destination,
+  amount,
+  memo,
+}: SendPaymentParams): Promise<{ success: boolean; hash?: string; error?: string }> {
+  try {
+    const client = await getClient();
+
+    const payment: Payment = {
+      TransactionType: "Payment",
+      Account: wallet.classicAddress,
+      Destination: destination,
+      Amount: xrpToDrops(amount), // Convert XRP to drops
+    };
+
+    if (memo) {
+      payment.Memos = [
+        {
+          Memo: {
+            MemoType: Buffer.from("gift_message", "utf8").toString("hex").toUpperCase(),
+            MemoData: Buffer.from(memo, "utf8").toString("hex").toUpperCase(),
+          },
+        },
+      ];
+    }
+
+    const prepared = await client.autofill(payment);
+    const signed = wallet.sign(prepared);
+    const result = await client.submitAndWait(signed.tx_blob);
+
+    const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
+
+    if (txResult.meta?.TransactionResult === "tesSUCCESS") {
+      return {
+        success: true,
+        hash: txResult.hash,
+      };
+    }
+
+    return {
+      success: false,
+      error: txResult.meta?.TransactionResult || "Payment failed",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send payment",
+    };
+  }
 }
 
 /**

@@ -7,11 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWallet } from "@/components/wallet/WalletProvider";
-import { smartSend } from "@/lib/xrpl/payments";
+import { sendXRPPayment } from "@/lib/xrpl/payments";
 import { getWalletFromSeed } from "@/lib/xrpl/wallet";
 import { isValidXRPLAddress, formatAmount } from "@/lib/utils/format";
-import { getExplorerTxLink, VerificationLevel, getLimitDisplay } from "@/lib/xrpl/constants";
-import { LimitWarning } from "@/components/did/LimitWarning";
+import { getExplorerTxLink } from "@/lib/xrpl/constants";
 import { VerificationBadge } from "@/components/did/VerificationBadge";
 import { toast } from "@/components/ui/use-toast";
 import {
@@ -23,9 +22,7 @@ import {
     User,
     MessageSquare,
     ExternalLink,
-    Gift,
-    AlertTriangle,
-    FileCheck
+    Gift
 } from "lucide-react";
 import Link from "next/link";
 
@@ -37,7 +34,7 @@ interface TransactionResult {
 }
 
 export function SendForm() {
-    const { wallet, balances, hasTrustline, refreshBalances, verificationLevel, sendLimit, isVerified } = useWallet();
+    const { wallet, balances, refreshBalances, verificationLevel } = useWallet();
 
     const [step, setStep] = useState<Step>("amount");
     const [amount, setAmount] = useState("");
@@ -45,7 +42,6 @@ export function SendForm() {
     const [message, setMessage] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState<TransactionResult | null>(null);
-    const [showVerifyPrompt, setShowVerifyPrompt] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(true);
 
     // Refresh wallet state when component mounts to ensure trustline status is current
@@ -78,10 +74,11 @@ export function SendForm() {
     }, []);
 
     const amountNum = parseFloat(amount) || 0;
-    const balanceNum = parseFloat(balances.rlusd) || 0;
-    const hasEnoughBalance = amountNum > 0 && amountNum <= balanceNum;
-    const isOverLimit = amountNum > sendLimit;
-    const willUseCheck = !isVerified || verificationLevel === VerificationLevel.UNVERIFIED;
+    // Use XRP balance since RLUSD testnet issuer is not available
+    const balanceNum = parseFloat(balances.xrp) || 0;
+    // Reserve 10 XRP for account reserve
+    const availableBalance = Math.max(0, balanceNum - 10);
+    const hasEnoughBalance = amountNum > 0 && amountNum <= availableBalance;
 
     const handleNext = () => {
         switch (step) {
@@ -89,17 +86,9 @@ export function SendForm() {
                 if (!hasEnoughBalance) {
                     toast({
                         title: "Invalid amount",
-                        description: amountNum > balanceNum
-                            ? "Insufficient RLUSD balance"
+                        description: amountNum > availableBalance
+                            ? "Insufficient XRP balance"
                             : "Please enter a valid amount",
-                        variant: "destructive",
-                    });
-                    return;
-                }
-                if (isOverLimit) {
-                    toast({
-                        title: "Amount exceeds limit",
-                        description: `Your current limit is ${getLimitDisplay(verificationLevel)}. Verify to increase.`,
                         variant: "destructive",
                     });
                     return;
@@ -145,7 +134,7 @@ export function SendForm() {
         try {
             const xrplWallet = getWalletFromSeed(wallet.seed!);
 
-            const txResult = await smartSend({
+            const txResult = await sendXRPPayment({
                 wallet: xrplWallet,
                 destination: recipient,
                 amount,
@@ -155,14 +144,14 @@ export function SendForm() {
             if (txResult.success && txResult.hash) {
                 setResult({
                     hash: txResult.hash,
-                    method: txResult.method,
+                    method: "direct",
                 });
                 setStep("success");
                 await refreshBalances();
 
                 toast({
-                    title: txResult.method === "check" ? "Check created!" : "Payment sent!",
-                    description: `${formatAmount(amount)} RLUSD ${txResult.method === "check" ? "check created" : "sent"} successfully`,
+                    title: "Payment sent!",
+                    description: `${formatAmount(amount)} XRP sent successfully`,
                     variant: "success",
                 });
             } else {
@@ -187,54 +176,20 @@ export function SendForm() {
         setResult(null);
     };
 
-    const handleManualRefresh = async () => {
-        setIsRefreshing(true);
-        try {
-            await refreshBalances();
-        } finally {
-            setIsRefreshing(false);
-        }
-    };
-
-    // Show loading while checking trustline status
+    // Show loading while checking status
     if (isRefreshing) {
         return (
             <Card>
                 <CardContent className="p-8 text-center">
                     <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-4" />
-                    <p className="text-slate-500">Checking wallet status...</p>
+                    <p className="text-slate-500">Loading...</p>
                 </CardContent>
             </Card>
         );
     }
 
-    if (!hasTrustline) {
-        return (
-            <Card>
-                <CardContent className="p-8 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-4">
-                        <DollarSign className="w-8 h-8 text-amber-600" />
-                    </div>
-                    <h3 className="text-lg font-semibold mb-2">RLUSD Not Enabled</h3>
-                    <p className="text-slate-500 mb-4">
-                        You need to enable RLUSD on your wallet before you can send payments.
-                    </p>
-                    <div className="flex gap-3 justify-center">
-                        <Link href="/dashboard">
-                            <Button>Go to Dashboard</Button>
-                        </Link>
-                        <Button variant="outline" onClick={handleManualRefresh}>
-                            <Loader2 className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-                            Refresh Status
-                        </Button>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-4">
-                        Already enabled RLUSD? Click &quot;Refresh Status&quot; to update.
-                    </p>
-                </CardContent>
-            </Card>
-        );
-    }
+    // NOTE: Removed RLUSD trustline check - testnet issuer address was invalid
+    // Users can now send with XRP balance
 
     // Success step
     if (step === "success" && result) {
@@ -245,18 +200,11 @@ export function SendForm() {
                         <CheckCircle2 className="w-10 h-10 text-white" />
                     </div>
                     <h2 className="text-2xl font-bold text-slate-900 mb-2">
-                        {result.method === "check" ? "Check Created!" : "Payment Sent!"}
+                        Payment Sent!
                     </h2>
                     <p className="text-slate-500 mb-2">
-                        {formatAmount(amount)} RLUSD {result.method === "check" ? "check created for" : "sent to"} the recipient
+                        {formatAmount(amount)} XRP sent to the recipient
                     </p>
-                    
-                    {result.method === "check" && (
-                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4 text-sm text-amber-700">
-                            <FileCheck className="w-4 h-4 inline mr-2" />
-                            The recipient needs to claim this check to receive the funds.
-                        </div>
-                    )}
 
                     <div className="p-4 bg-slate-50 rounded-xl mb-6">
                         <p className="text-xs text-slate-500 mb-1">Transaction Hash</p>
@@ -296,11 +244,7 @@ export function SendForm() {
                     <VerificationBadge level={verificationLevel} size="sm" />
                 </div>
                 <CardDescription>
-                    Send RLUSD to anyone with an XRPL wallet
-                    <span className="block text-xs mt-1">
-                        Your limit: {getLimitDisplay(verificationLevel)}
-                        {willUseCheck && " • Sent as claimable check"}
-                    </span>
+                    Send XRP to anyone with an XRPL wallet
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -336,12 +280,13 @@ export function SendForm() {
                         <div className="text-center mb-6">
                             <p className="text-sm text-slate-500 mb-2">Available Balance</p>
                             <p className="text-3xl font-bold text-slate-900">
-                                {formatAmount(balances.rlusd)} <span className="text-lg text-slate-500">RLUSD</span>
+                                {formatAmount(availableBalance.toString())} <span className="text-lg text-slate-500">XRP</span>
                             </p>
+                            <p className="text-xs text-slate-400">({formatAmount(balances.xrp)} XRP total, 10 XRP reserved)</p>
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="amount">Amount (SGD equivalent)</Label>
+                            <Label htmlFor="amount">Amount (XRP)</Label>
                             <div className="relative">
                                 <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                                 <Input
@@ -355,22 +300,14 @@ export function SendForm() {
                                     min="0"
                                 />
                             </div>
-                            <p className="text-xs text-slate-500">1 SGD = 1 RLUSD for demo purposes</p>
+                            <p className="text-xs text-slate-500">Sending XRP on testnet</p>
                         </div>
-
-                        {amountNum > 0 && (
-                            <LimitWarning 
-                                amount={amountNum} 
-                                verificationLevel={verificationLevel}
-                                onVerifyClick={() => setShowVerifyPrompt(true)}
-                            />
-                        )}
 
                         <Button
                             className="w-full"
                             size="lg"
                             onClick={handleNext}
-                            disabled={!hasEnoughBalance || isOverLimit}
+                            disabled={!hasEnoughBalance}
                         >
                             Continue
                             <ArrowRight className="w-4 h-4 ml-2" />
@@ -394,20 +331,6 @@ export function SendForm() {
                                 />
                             </div>
                         </div>
-
-                        {willUseCheck && (
-                            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                                <div className="flex gap-3">
-                                    <FileCheck className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                                    <div>
-                                        <p className="font-medium text-blue-800">Sending as Claimable Check</p>
-                                        <p className="text-sm text-blue-700">
-                                            The recipient will need to claim this check to receive the funds.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
 
                         <div className="flex gap-3">
                             <Button variant="outline" onClick={handleBack} className="flex-1">
@@ -458,7 +381,7 @@ export function SendForm() {
                         <div className="p-4 bg-slate-50 rounded-xl space-y-3">
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Amount</span>
-                                <span className="font-semibold">{formatAmount(amount)} RLUSD</span>
+                                <span className="font-semibold">{formatAmount(amount)} XRP</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Recipient</span>
@@ -468,8 +391,8 @@ export function SendForm() {
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Method</span>
-                                <span className={`font-semibold ${willUseCheck ? "text-amber-600" : "text-emerald-600"}`}>
-                                    {willUseCheck ? "Claimable Check" : "Direct Payment"}
+                                <span className="font-semibold text-emerald-600">
+                                    Direct Payment
                                 </span>
                             </div>
                             {message && (
@@ -498,12 +421,12 @@ export function SendForm() {
                                 {isLoading ? (
                                     <>
                                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                        {willUseCheck ? "Creating..." : "Sending..."}
+                                        Sending...
                                     </>
                                 ) : (
                                     <>
                                         <Send className="w-4 h-4 mr-2" />
-                                        {willUseCheck ? "Create Check" : "Send Now"}
+                                        Send Now
                                     </>
                                 )}
                             </Button>
