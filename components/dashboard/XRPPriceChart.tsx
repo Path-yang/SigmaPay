@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 
@@ -10,37 +10,63 @@ interface PriceData {
   changePercent24h: number;
   high24h: number;
   low24h: number;
-  sparkline: number[];
+  prices: [number, number][]; // [timestamp, price]
 }
+
+type TimeRange = "1D" | "7D" | "1M" | "3M" | "1Y";
+
+const TIME_RANGES: { label: TimeRange; days: number }[] = [
+  { label: "1D", days: 1 },
+  { label: "7D", days: 7 },
+  { label: "1M", days: 30 },
+  { label: "3M", days: 90 },
+  { label: "1Y", days: 365 },
+];
 
 export function XRPPriceChart() {
   const [priceData, setPriceData] = useState<PriceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState<TimeRange>("7D");
 
-  const fetchPrice = async () => {
+  const fetchPrice = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      // CoinGecko free API - no auth needed
-      const response = await fetch(
-        "https://api.coingecko.com/api/v3/coins/ripple?localization=false&tickers=false&community_data=false&developer_data=false&sparkline=true"
+
+      const days = TIME_RANGES.find((t) => t.label === timeRange)?.days || 7;
+
+      // Fetch current price
+      const priceResponse = await fetch(
+        "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd&include_24hr_change=true&include_24hr_high=true&include_24hr_low=true"
       );
-      
-      if (!response.ok) {
+
+      // Fetch chart data
+      const chartResponse = await fetch(
+        `https://api.coingecko.com/api/v3/coins/ripple/market_chart?vs_currency=usd&days=${days}`
+      );
+
+      if (!priceResponse.ok || !chartResponse.ok) {
         throw new Error("Failed to fetch price");
       }
-      
-      const data = await response.json();
-      
+
+      const priceJson = await priceResponse.json();
+      const chartJson = await chartResponse.json();
+
+      // Calculate change based on chart data
+      const prices = chartJson.prices as [number, number][];
+      const firstPrice = prices[0]?.[1] || 0;
+      const lastPrice = prices[prices.length - 1]?.[1] || 0;
+      const change = lastPrice - firstPrice;
+      const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
+
       setPriceData({
-        current: data.market_data.current_price.usd,
-        change24h: data.market_data.price_change_24h,
-        changePercent24h: data.market_data.price_change_percentage_24h,
-        high24h: data.market_data.high_24h.usd,
-        low24h: data.market_data.low_24h.usd,
-        sparkline: data.market_data.sparkline_7d?.price?.slice(-24) || [], // Last 24 data points
+        current: priceJson.ripple?.usd || lastPrice,
+        change24h: change,
+        changePercent24h: changePercent,
+        high24h: Math.max(...prices.map((p) => p[1])),
+        low24h: Math.min(...prices.map((p) => p[1])),
+        prices: prices,
       });
     } catch (err) {
       setError("Unable to load price");
@@ -48,53 +74,71 @@ export function XRPPriceChart() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange]);
 
   useEffect(() => {
     fetchPrice();
-    // Refresh every 60 seconds
     const interval = setInterval(fetchPrice, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchPrice]);
 
-  const isPositive = priceData?.changePercent24h && priceData.changePercent24h >= 0;
+  const isPositive = priceData && priceData.changePercent24h >= 0;
+  const chartColor = isPositive ? "#10b981" : "#ef4444";
 
-  // Mini sparkline chart
-  const renderSparkline = () => {
-    if (!priceData?.sparkline?.length) return null;
-    
-    const data = priceData.sparkline;
-    const min = Math.min(...data);
-    const max = Math.max(...data);
+  // Render the main chart
+  const renderChart = () => {
+    if (!priceData?.prices?.length) return null;
+
+    const prices = priceData.prices;
+    const values = prices.map((p) => p[1]);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
     const range = max - min || 1;
-    
-    const width = 120;
-    const height = 40;
-    const points = data.map((value, index) => {
-      const x = (index / (data.length - 1)) * width;
-      const y = height - ((value - min) / range) * height;
-      return `${x},${y}`;
-    }).join(" ");
+
+    const width = 100; // percentage
+    const height = 150;
+    const padding = 5;
+
+    // Generate path
+    const points = prices.map((point, index) => {
+      const x = (index / (prices.length - 1)) * 100;
+      const y = height - padding - ((point[1] - min) / range) * (height - padding * 2);
+      return { x, y, price: point[1], time: point[0] };
+    });
+
+    const pathD = points
+      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+      .join(" ");
+
+    // Create gradient fill path
+    const fillD = `${pathD} L 100 ${height} L 0 ${height} Z`;
 
     return (
-      <svg width={width} height={height} className="overflow-visible">
-        <defs>
-          <linearGradient id="sparklineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polyline
-          fill="none"
-          stroke={isPositive ? "#10b981" : "#ef4444"}
-          strokeWidth="2"
-          points={points}
-        />
-        <polygon
-          fill="url(#sparklineGradient)"
-          points={`0,${height} ${points} ${width},${height}`}
-        />
-      </svg>
+      <div className="relative w-full" style={{ height: `${height}px` }}>
+        <svg
+          viewBox={`0 0 100 ${height}`}
+          preserveAspectRatio="none"
+          className="w-full h-full"
+        >
+          <defs>
+            <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={chartColor} stopOpacity="0.2" />
+              <stop offset="100%" stopColor={chartColor} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {/* Fill area */}
+          <path d={fillD} fill="url(#chartGradient)" />
+          {/* Line */}
+          <path
+            d={pathD}
+            fill="none"
+            stroke={chartColor}
+            strokeWidth="0.5"
+            vectorEffect="non-scaling-stroke"
+            style={{ strokeWidth: "2px" }}
+          />
+        </svg>
+      </div>
     );
   };
 
@@ -102,15 +146,15 @@ export function XRPPriceChart() {
     return (
       <Card className="mb-6">
         <CardContent className="p-4">
-          <div className="flex items-center justify-between">
+          <div className="animate-pulse space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-slate-200 animate-pulse" />
+              <div className="w-10 h-10 rounded-full bg-slate-200" />
               <div className="space-y-2">
-                <div className="w-16 h-4 bg-slate-200 rounded animate-pulse" />
-                <div className="w-24 h-6 bg-slate-200 rounded animate-pulse" />
+                <div className="w-20 h-4 bg-slate-200 rounded" />
+                <div className="w-32 h-8 bg-slate-200 rounded" />
               </div>
             </div>
-            <div className="w-[120px] h-[40px] bg-slate-200 rounded animate-pulse" />
+            <div className="w-full h-[150px] bg-slate-200 rounded" />
           </div>
         </CardContent>
       </Card>
@@ -135,54 +179,85 @@ export function XRPPriceChart() {
   return (
     <Card className="mb-6 overflow-hidden">
       <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          {/* Left side - Price info */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">X</span>
+        {/* Header with price */}
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <p className="text-sm text-slate-500 mb-1">XRP / USD</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-slate-900">
+                ${priceData?.current?.toFixed(4) || "0.00"}
+              </span>
+              <span
+                className={`flex items-center text-sm font-semibold ${
+                  isPositive ? "text-emerald-600" : "text-red-500"
+                }`}
+              >
+                {isPositive ? (
+                  <TrendingUp className="w-4 h-4 mr-1" />
+                ) : (
+                  <TrendingDown className="w-4 h-4 mr-1" />
+                )}
+                {isPositive ? "+" : ""}
+                {priceData?.changePercent24h?.toFixed(2)}%
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-500 font-medium">XRP/USD</span>
-                {loading && <RefreshCw className="w-3 h-3 text-slate-400 animate-spin" />}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-slate-900">
-                  ${priceData?.current?.toFixed(4) || "0.00"}
-                </span>
-                <span className={`flex items-center text-sm font-medium ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
-                  {isPositive ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
-                  {isPositive ? "+" : ""}{priceData?.changePercent24h?.toFixed(2)}%
-                </span>
-              </div>
-            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              {isPositive ? "+" : ""}${priceData?.change24h?.toFixed(4)} {timeRange}
+            </p>
           </div>
+          {loading && (
+            <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />
+          )}
+        </div>
+
+        {/* Time range selector */}
+        <div className="flex gap-1 mb-4">
+          {TIME_RANGES.map((range) => (
+            <button
+              key={range.label}
+              onClick={() => setTimeRange(range.label)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                timeRange === range.label
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {range.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Chart */}
+        <div className="relative">
+          {renderChart()}
           
-          {/* Right side - Sparkline */}
-          <div className="hidden sm:block">
-            {renderSparkline()}
+          {/* Y-axis labels */}
+          <div className="absolute top-0 right-0 h-full flex flex-col justify-between text-[10px] text-slate-400 py-1">
+            <span>${priceData?.high24h?.toFixed(3)}</span>
+            <span>${priceData?.low24h?.toFixed(3)}</span>
           </div>
         </div>
-        
-        {/* 24h High/Low */}
-        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
-          <div className="flex-1">
-            <p className="text-xs text-slate-500">24h High</p>
-            <p className="text-sm font-medium text-emerald-600">${priceData?.high24h?.toFixed(4)}</p>
-          </div>
-          <div className="flex-1">
-            <p className="text-xs text-slate-500">24h Low</p>
-            <p className="text-sm font-medium text-red-600">${priceData?.low24h?.toFixed(4)}</p>
-          </div>
-          <div className="flex-1 text-right">
-            <p className="text-xs text-slate-500">24h Change</p>
-            <p className={`text-sm font-medium ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
-              {isPositive ? "+" : ""}${priceData?.change24h?.toFixed(4)}
+
+        {/* Stats row */}
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100 text-sm">
+          <div>
+            <p className="text-xs text-slate-400">High</p>
+            <p className="font-medium text-emerald-600">
+              ${priceData?.high24h?.toFixed(4)}
             </p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Low</p>
+            <p className="font-medium text-red-500">
+              ${priceData?.low24h?.toFixed(4)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-slate-400">Volume</p>
+            <p className="font-medium text-slate-700">Live</p>
           </div>
         </div>
       </CardContent>
     </Card>
   );
 }
-
