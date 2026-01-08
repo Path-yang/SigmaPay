@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useWallet } from "@/components/wallet/WalletProvider";
-import { smartSend } from "@/lib/xrpl/payments";
+import { smartSend, sendXRPPayment } from "@/lib/xrpl/payments";
 import { getWalletFromSeed } from "@/lib/xrpl/wallet";
 import { isValidXRPLAddress, formatAmount } from "@/lib/utils/format";
 import { getExplorerTxLink, getLimitDisplay, RLUSD_CURRENCY_DISPLAY } from "@/lib/xrpl/constants";
@@ -25,11 +25,13 @@ import {
     ExternalLink,
     Gift,
     AlertTriangle,
-    RefreshCw
+    RefreshCw,
+    Coins
 } from "lucide-react";
 import Link from "next/link";
 
 type Step = "amount" | "recipient" | "message" | "confirm" | "success";
+type Currency = "XRP" | "RLUSD";
 
 interface TransactionResult {
     hash: string;
@@ -40,6 +42,7 @@ export function SendForm() {
     const { wallet, balances, refreshBalances, verificationLevel, sendLimit, isVerified, hasTrustline } = useWallet();
 
     const [step, setStep] = useState<Step>("amount");
+    const [currency, setCurrency] = useState<Currency>("XRP"); // Default to XRP for easier testing
     const [amount, setAmount] = useState("");
     const [recipient, setRecipient] = useState("");
     const [message, setMessage] = useState("");
@@ -75,10 +78,18 @@ export function SendForm() {
     }, []);
 
     const amountNum = parseFloat(amount) || 0;
+    
+    // Get balance based on selected currency
+    const xrpBalance = parseFloat(balances.xrp) || 0;
     const rlusdBalance = parseFloat(balances.rlusd) || 0;
-    const hasEnoughBalance = amountNum > 0 && amountNum <= rlusdBalance;
-    const isOverLimit = amountNum > sendLimit;
-    const willUseCheck = !isVerified && amountNum <= sendLimit;
+    
+    // For XRP, reserve 10 XRP for account reserve
+    const availableXRP = Math.max(0, xrpBalance - 10);
+    const currentBalance = currency === "XRP" ? availableXRP : rlusdBalance;
+    
+    const hasEnoughBalance = amountNum > 0 && amountNum <= currentBalance;
+    const isOverLimit = currency === "RLUSD" && amountNum > sendLimit;
+    const willUseCheck = currency === "RLUSD" && !isVerified && amountNum <= sendLimit;
 
     const handleNext = () => {
         switch (step) {
@@ -86,8 +97,8 @@ export function SendForm() {
                 if (!hasEnoughBalance) {
                     toast({
                         title: "Invalid amount",
-                        description: amountNum > rlusdBalance
-                            ? "Insufficient RLUSD balance"
+                        description: amountNum > currentBalance
+                            ? `Insufficient ${currency} balance`
                             : "Please enter a valid amount",
                         variant: "destructive",
                     });
@@ -142,12 +153,31 @@ export function SendForm() {
         try {
             const xrplWallet = getWalletFromSeed(wallet.seed!);
 
-            const txResult = await smartSend({
-                wallet: xrplWallet,
-                destination: recipient,
-                amount,
-                memo: message || undefined,
-            });
+            let txResult;
+            
+            if (currency === "XRP") {
+                // Send XRP directly
+                const result = await sendXRPPayment({
+                    wallet: xrplWallet,
+                    destination: recipient,
+                    amount,
+                    memo: message || undefined,
+                });
+                txResult = {
+                    success: result.success,
+                    method: "direct" as const,
+                    hash: result.hash,
+                    error: result.error,
+                };
+            } else {
+                // Send RLUSD via smartSend (handles checks vs direct)
+                txResult = await smartSend({
+                    wallet: xrplWallet,
+                    destination: recipient,
+                    amount,
+                    memo: message || undefined,
+                });
+            }
 
             if (txResult.success && txResult.hash) {
                 setResult({
@@ -159,7 +189,7 @@ export function SendForm() {
 
                 toast({
                     title: txResult.method === "check" ? "Check created!" : "Payment sent!",
-                    description: `${formatAmount(amount)} ${RLUSD_CURRENCY_DISPLAY} ${txResult.method === "check" ? "check created" : "sent"} successfully`,
+                    description: `${formatAmount(amount)} ${currency} ${txResult.method === "check" ? "check created" : "sent"} successfully`,
                     variant: "success",
                 });
             } else {
@@ -206,8 +236,8 @@ export function SendForm() {
         );
     }
 
-    // Show trustline setup prompt if not enabled
-    if (!hasTrustline) {
+    // Show trustline setup prompt ONLY if RLUSD is selected and not enabled
+    if (currency === "RLUSD" && !hasTrustline) {
         return (
             <Card>
                 <CardContent className="p-8 text-center">
@@ -216,9 +246,13 @@ export function SendForm() {
                     </div>
                     <h3 className="text-lg font-semibold text-slate-900 mb-2">RLUSD Not Enabled</h3>
                     <p className="text-slate-500 mb-4">
-                        You need to enable RLUSD in your wallet before you can send payments.
+                        You need to enable RLUSD in your wallet before you can send RLUSD payments.
                     </p>
-                    <div className="flex gap-3 justify-center">
+                    <div className="flex gap-3 justify-center flex-wrap">
+                        <Button variant="outline" onClick={() => setCurrency("XRP")}>
+                            <Coins className="w-4 h-4 mr-2" />
+                            Send XRP Instead
+                        </Button>
                         <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
                             <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
                             Refresh
@@ -247,7 +281,7 @@ export function SendForm() {
                         {result.method === "check" ? "Check Created!" : "Payment Sent!"}
                     </h2>
                     <p className="text-slate-500 mb-2">
-                        {formatAmount(amount)} {RLUSD_CURRENCY_DISPLAY} {result.method === "check" ? "check created for" : "sent to"} the recipient
+                        {formatAmount(amount)} {currency} {result.method === "check" ? "check created for" : "sent to"} the recipient
                     </p>
 
                     {result.method === "check" && (
@@ -295,11 +329,13 @@ export function SendForm() {
                     <VerificationBadge level={verificationLevel} size="sm" />
                 </div>
                 <CardDescription>
-                    Send {RLUSD_CURRENCY_DISPLAY} to anyone with an XRPL wallet
-                    <span className="block text-xs mt-1">
-                        Your limit: {getLimitDisplay(verificationLevel)}
-                        {!isVerified && " • Sent as claimable check"}
-                    </span>
+                    Send {currency} to anyone with an XRPL wallet
+                    {currency === "RLUSD" && (
+                        <span className="block text-xs mt-1">
+                            Your limit: {getLimitDisplay(verificationLevel)}
+                            {!isVerified && " • Sent as claimable check"}
+                        </span>
+                    )}
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -332,17 +368,52 @@ export function SendForm() {
                 {/* Amount Step */}
                 {step === "amount" && (
                     <div className="space-y-4">
+                        {/* Currency Toggle */}
+                        <div className="flex rounded-xl bg-slate-100 p-1">
+                            <button
+                                onClick={() => setCurrency("XRP")}
+                                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                                    currency === "XRP"
+                                        ? "bg-white text-slate-900 shadow-sm"
+                                        : "text-slate-500 hover:text-slate-700"
+                                }`}
+                            >
+                                <Coins className="w-4 h-4 inline mr-2" />
+                                XRP
+                            </button>
+                            <button
+                                onClick={() => setCurrency("RLUSD")}
+                                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                                    currency === "RLUSD"
+                                        ? "bg-white text-slate-900 shadow-sm"
+                                        : "text-slate-500 hover:text-slate-700"
+                                }`}
+                            >
+                                <DollarSign className="w-4 h-4 inline mr-2" />
+                                RLUSD
+                            </button>
+                        </div>
+
                         <div className="text-center mb-6">
-                            <p className="text-sm text-slate-500 mb-2">Available {RLUSD_CURRENCY_DISPLAY} Balance</p>
+                            <p className="text-sm text-slate-500 mb-2">Available {currency} Balance</p>
                             <p className="text-3xl font-bold text-slate-900">
-                                ${formatAmount(balances.rlusd)} <span className="text-lg text-slate-500">{RLUSD_CURRENCY_DISPLAY}</span>
+                                {currency === "RLUSD" ? "$" : ""}{formatAmount(currentBalance.toString())} <span className="text-lg text-slate-500">{currency}</span>
                             </p>
+                            {currency === "XRP" && (
+                                <p className="text-xs text-slate-400 mt-1">
+                                    ({formatAmount(balances.xrp)} XRP total, 10 XRP reserved)
+                                </p>
+                            )}
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="amount">Amount ({RLUSD_CURRENCY_DISPLAY})</Label>
+                            <Label htmlFor="amount">Amount ({currency})</Label>
                             <div className="relative">
-                                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                {currency === "RLUSD" ? (
+                                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                ) : (
+                                    <Coins className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                )}
                                 <Input
                                     id="amount"
                                     type="number"
@@ -356,7 +427,7 @@ export function SendForm() {
                             </div>
                         </div>
 
-                        {amountNum > 0 && isOverLimit && (
+                        {currency === "RLUSD" && amountNum > 0 && isOverLimit && (
                             <LimitWarning
                                 amount={amountNum}
                                 verificationLevel={verificationLevel}
@@ -464,7 +535,9 @@ export function SendForm() {
                         <div className="p-4 bg-slate-50 rounded-xl space-y-3">
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Amount</span>
-                                <span className="font-semibold">${formatAmount(amount)} {RLUSD_CURRENCY_DISPLAY}</span>
+                                <span className="font-semibold">
+                                    {currency === "RLUSD" ? "$" : ""}{formatAmount(amount)} {currency}
+                                </span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Recipient</span>
