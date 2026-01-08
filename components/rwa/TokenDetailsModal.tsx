@@ -87,11 +87,20 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
 
     setCreatingTrustline(true);
     try {
+      // Use a valid trustline limit - check if totalSupply is a valid number
+      let trustlineLimit = "1000000000"; // Default high limit
+      if (token.metadata?.totalSupply) {
+        const supply = parseFloat(token.metadata.totalSupply);
+        if (!isNaN(supply) && supply > 0) {
+          trustlineLimit = token.metadata.totalSupply;
+        }
+      }
+      
       const result = await createRWATrustline(
         wallet,
         token.currency || "",
         token.issuer || "",
-        token.metadata?.totalSupply || "1000000000"
+        trustlineLimit
       );
 
       if (result.success) {

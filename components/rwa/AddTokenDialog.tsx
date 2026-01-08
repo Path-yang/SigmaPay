@@ -18,6 +18,7 @@ interface AddTokenDialogProps {
 export function AddTokenDialog({ open, onClose, onTokenAdded }: AddTokenDialogProps) {
   const [issuer, setIssuer] = useState("");
   const [currency, setCurrency] = useState("");
+  const [displayName, setDisplayName] = useState(""); // Optional display name
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
@@ -41,12 +42,13 @@ export function AddTokenDialog({ open, onClose, onTokenAdded }: AddTokenDialogPr
 
     setLoading(true);
     try {
-      const result = await addTokenToMarketplace(currency, issuer);
+      // Pass the display name to the marketplace function
+      const result = await addTokenToMarketplace(currency, issuer, displayName || currency);
       
       if (result.success) {
         toast({
           title: "Token Added! 🎉",
-          description: `Successfully added ${result.token?.metadata?.name || currency} to the marketplace.`,
+          description: `Successfully added ${result.token?.metadata?.name || displayName || currency} to the marketplace.`,
           variant: "default",
         });
         
@@ -54,10 +56,11 @@ export function AddTokenDialog({ open, onClose, onTokenAdded }: AddTokenDialogPr
         onClose();
         setIssuer("");
         setCurrency("");
+        setDisplayName("");
       } else {
         toast({
           title: "Token Not Found",
-          description: result.error || "Could not find the specified token.",
+          description: result.error || "Could not find the specified token. Please verify the issuer address and token symbol are correct.",
           variant: "destructive",
         });
       }
@@ -77,6 +80,7 @@ export function AddTokenDialog({ open, onClose, onTokenAdded }: AddTokenDialogPr
       onClose();
       setIssuer("");
       setCurrency("");
+      setDisplayName("");
     }
   };
 
@@ -102,7 +106,7 @@ export function AddTokenDialog({ open, onClose, onTokenAdded }: AddTokenDialogPr
               <Input
                 id="issuer"
                 value={issuer}
-                onChange={(e) => setIssuer(e.target.value)}
+                onChange={(e) => setIssuer(e.target.value.trim())}
                 placeholder="rXXXXXXXX..."
                 className="font-mono text-sm"
               />
@@ -110,15 +114,35 @@ export function AddTokenDialog({ open, onClose, onTokenAdded }: AddTokenDialogPr
             </div>
 
             <div>
-              <Label htmlFor="currency">Token Currency *</Label>
+              <Label htmlFor="currency">Token Symbol *</Label>
               <Input
                 id="currency"
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-                placeholder="e.g., MAPT1, GLD, etc."
-                maxLength={40}
+                onChange={(e) => {
+                  // Allow letters and numbers, preserve case for display
+                  const value = e.target.value.replace(/[^a-zA-Z0-9]/g, "");
+                  setCurrency(value);
+                  // Auto-set display name if not manually set
+                  if (!displayName || displayName === currency) {
+                    setDisplayName(value);
+                  }
+                }}
+                placeholder="e.g., Zaixi, GOLD, MAPT1"
+                maxLength={20}
               />
-              <p className="text-xs text-slate-500 mt-1">The token symbol or currency code</p>
+              <p className="text-xs text-slate-500 mt-1">The token symbol (as shown by issuer)</p>
+            </div>
+
+            <div>
+              <Label htmlFor="displayName">Display Name (Optional)</Label>
+              <Input
+                id="displayName"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="e.g., Zaixi Gold Token"
+                maxLength={50}
+              />
+              <p className="text-xs text-slate-500 mt-1">Friendly name for this token</p>
             </div>
           </div>
 

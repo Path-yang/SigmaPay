@@ -1323,30 +1323,69 @@ export const DEMO_RWA_TOKENS: RWAToken[] = [
  */
 export async function addTokenToMarketplace(
   currency: string,
-  issuer: string
+  issuer: string,
+  displayName?: string
 ): Promise<{ success: boolean; token?: RWAToken; error?: string }> {
   try {
+    // Validate inputs
+    if (!currency || currency.length === 0) {
+      return { success: false, error: "Token symbol is required." };
+    }
+    if (!issuer || !issuer.startsWith("r") || issuer.length < 25) {
+      return { success: false, error: "Invalid issuer address." };
+    }
+
+    // Convert currency to XRPL format for lookup
+    const xrplCurrency = currencyToXRPL(currency);
+    
     // First check if token already exists in marketplace
     const existingTokens = getAllMarketplaceTokens();
-    const existingToken = existingTokens.find(t => t.currency === currency && t.issuer === issuer);
+    const existingToken = existingTokens.find(t => 
+      (t.currency === currency || t.currency === xrplCurrency) && t.issuer === issuer
+    );
     
     if (existingToken) {
       return { success: true, token: existingToken };
     }
     
-    // Try to fetch metadata from ledger
-    const token = await fetchTokenMetadataFromLedger(currency, issuer);
+    // Try to fetch metadata from ledger first
+    let token = await fetchTokenMetadataFromLedger(xrplCurrency, issuer);
+    
+    // If not found with XRPL format, try original currency
+    if (!token && xrplCurrency !== currency) {
+      token = await fetchTokenMetadataFromLedger(currency, issuer);
+    }
     
     if (token) {
+      // Update display name if provided
+      if (displayName && token.metadata) {
+        token.metadata.name = displayName;
+      }
       // Store the token locally so it appears in future marketplace loads
       storeRWAToken(issuer, token);
       return { success: true, token };
     }
     
-    return {
-      success: false,
-      error: "Could not find token metadata on the ledger. The token may not exist or may not have been created through SigmaPay.",
+    // If no metadata found on ledger, create a basic token entry
+    // This allows users to add tokens that exist but weren't created through SigmaPay
+    console.log("No metadata found on ledger, creating basic token entry");
+    const basicToken: RWAToken = {
+      currency: xrplCurrency,
+      currencyDisplay: displayName || currency,
+      issuer: issuer,
+      balance: "0",
+      metadata: {
+        name: displayName || currency,
+        description: "Token discovered from XRPL ledger. Create a trustline to receive it.",
+        category: RWACategory.OTHER,
+        totalSupply: "1000000000", // Default high supply for trustline
+        createdAt: new Date().toISOString(),
+      },
     };
+    
+    // Store the basic token
+    storeRWAToken(issuer, basicToken);
+    return { success: true, token: basicToken };
     
   } catch (error) {
     console.error("Failed to add token to marketplace:", error);
