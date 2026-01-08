@@ -1,267 +1,205 @@
 # SigmaPay Σ
 
-> Send money & real-world assets home instantly. No hidden fees. Verified & secure.
+A cross-border financial platform for instant remittances, conditional escrow payments, and real-world asset tokenization built on the XRP Ledger.
 
-## 🎯 Problem
+**Live Demo:** [sigma-pay-ten.vercel.app](https://sigma-pay-ten.vercel.app)
 
-Sending small amounts of money internationally (remittances) is expensive due to high flat fees and slow processing times. Migrant workers often pay 5-10% in fees just to send money to their families. Additionally, transferring tokenized real-world assets across borders is complex and inaccessible.
+**GitHub:** [github.com/Path-yang/SigmaPay](https://github.com/Path-yang/SigmaPay)
 
-## 💡 Solution
+## The Problem
 
-SigmaPay is a mobile-first web app that leverages the XRP Ledger to enable:
-- **Instant, low-cost international transfers** using RLUSD stablecoin
-- **RWA Marketplace** for tokenizing and transferring real-world assets globally
-- **DID-based identity verification** for higher limits and compliance
+Cross-border remittances cost too much and take too long. Migrant workers sending $500 home lose $30-50 to fees and wait 3-5 days for settlement. The correspondent banking system extracts value at every step while underbanked populations have no alternatives.
 
-## 🔧 XRPL Features Used
+Real-world assets face similar friction. Property, commodities, and trade finance instruments remain trapped within national boundaries due to regulatory complexity and lack of infrastructure.
 
-| Feature | How We Use It |
-|---------|---------------|
-| **RLUSD** | Core payment currency - stable USD value |
-| **Payments** | Direct instant transfers for verified users |
-| **Checks** | Claimable payments for unverified users |
-| **DID** | On-chain identity verification |
-| **Credentials** | Permissioned flows based on verification level |
-| **Memos** | Personal messages and RWA metadata |
-| **Trustlines/IOUs** | Real-world asset tokenization |
+## Our Solution
 
-## 🏠 RWA Marketplace (NEW!)
+SigmaPay unifies payments, escrow, and asset tokenization into a single mobile-first interface. We leverage XRPL's native features to deliver:
 
-Tokenize and transfer real-world assets globally:
+- Instant transfers settling in 3-5 seconds
+- Fees under $0.01 per transaction
+- RLUSD stablecoin for price stability
+- On-chain identity verification for compliance
+- Time-locked and condition-locked escrow payments
+- Real-world asset tokenization and global transfer
 
-| Asset Category | Examples |
-|----------------|----------|
-| 🏠 **Real Estate** | Fractional property ownership |
-| 🥇 **Commodities** | Tokenized gold, silver, oil |
-| 🎨 **Art** | Artwork & collectibles |
-| 📄 **Trade Finance** | Invoices, receivables |
-| 🎓 **Credentials** | Certificates, licenses |
-| 📈 **Securities** | Stocks, bonds |
+## Features
 
-### RWA Features
-- **Tokenize Assets** - Create blockchain-backed tokens representing physical assets
-- **Global Transfer** - Send RWA tokens to anyone worldwide in 3-5 seconds
-- **Verification Required** - Only verified users can issue RWA tokens (trust & compliance)
-- **Rich Metadata** - Asset details, valuations, documents stored on-chain
-- **Marketplace** - Browse and receive tokenized assets from other issuers
+### Payments
+Send XRP or RLUSD to anyone with an XRPL address. Verified users get direct instant payments. Unverified users send via claimable checks that recipients can review before accepting.
 
-## 🔐 Verification Levels
+### Identity Verification
+Three-tier verification system using XRPL's DID infrastructure:
+- Unverified: $100 limit, claimable checks only
+- Basic Verified: $1,000 limit, direct payments enabled
+- Fully Verified: Unlimited transfers
 
-| Level | Send Limit | Payment Method | RWA Issuance |
-|-------|------------|----------------|--------------|
-| Unverified | $100 | Claimable Checks | ❌ |
-| Basic | $1,000 | Direct Payments | ✅ |
-| Verified | Unlimited | Direct Payments | ✅ |
+Verification status is stored on-chain and visible to recipients, creating a transparent trust layer.
 
-## 🛠️ Tech Stack
-
-- **Next.js 14** (App Router)
-- **TypeScript**
-- **Tailwind CSS** + shadcn/ui
-- **xrpl.js** v3.1
-- **XRPL Testnet**
-
-## ✨ Features
-
-### Core Functionality
-- 🔐 **Wallet Management** - Create or import XRPL wallets with AES-256 encrypted storage
-- 💵 **RLUSD Integration** - Full support for Ripple's USD stablecoin
-- ⚡ **Direct Payments** - Send RLUSD instantly (for verified users)
-- 📝 **Claimable Checks** - Create checks that recipients can claim (for unverified users)
-- 🆔 **DID Verification** - On-chain identity for higher limits
-- 📜 **Transaction History** - View all sent/received transactions
-- 💬 **Personal Messages** - Attach notes via XRPL memos
-- 📱 **QR Code Sharing** - Easy address sharing
+### Escrow
+Create time-locked or condition-locked payments using native XRPL escrow:
+- Schedule payments for future release dates
+- Require secret codes for conditional release (SHA-256 crypto conditions)
+- Cancel unreleased escrows after expiration
+- Use cases include milestone payments, deposits, and trade settlement
 
 ### RWA Marketplace
-- 🏭 **Tokenize Assets** - Create RWA tokens with rich metadata
-- 🌍 **Global Transfer** - Send RWA tokens worldwide instantly
-- 📊 **Portfolio View** - Track your tokenized asset holdings
-- 🛒 **Marketplace** - Browse available RWA tokens
-- 🔒 **Compliance** - Verification required for issuance
+Tokenize and transfer real-world assets globally:
+- Real estate fractional ownership
+- Commodities (gold, silver, oil)
+- Art and collectibles
+- Trade finance instruments
+- Credentials and certificates
 
-## 🚀 Quick Start
+Verified users can issue tokens with rich metadata. Recipients automatically establish trustlines to receive assets.
+
+### Live Price Chart
+Real-time XRP price tracking with USD/SGD toggle and multiple time ranges (1D, 7D, 1M, 3M, 1Y).
+
+## XRPL Features Used
+
+| Feature | Implementation |
+|---------|----------------|
+| Payments | Direct RLUSD/XRP transfers for verified users |
+| Checks | Claimable payment instruments for unverified users |
+| Escrows | Time-locked and condition-locked payments with crypto conditions |
+| DIDs | On-chain identity verification via DIDSet transactions |
+| Trustlines | RLUSD integration and RWA token issuance |
+| Memos | Personal messages and asset metadata storage |
+
+## Tech Stack
+
+- Next.js 14 (App Router)
+- TypeScript
+- Tailwind CSS
+- shadcn/ui components
+- xrpl.js v3.1
+- crypto-js (AES-256 encryption)
+- five-bells-condition (escrow crypto conditions)
+- Vercel deployment
+
+## Getting Started
 
 ### Prerequisites
-- Node.js 18+
+- Node.js 18.17 or higher
 - npm or yarn
 
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/Path-yang/SigmaPay.git
-
-# Navigate to the project
 cd SigmaPay
-
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open http://localhost:3000 in your browser.
 
-### Build for Production
+### Production Build
 
 ```bash
 npm run build
 npm start
 ```
 
-## 📱 Usage Guide
+## Usage
 
-### 1. Create a Wallet
-1. Click **"Get Started"** on the landing page
-2. Choose **"Create New"** or import existing
-3. Set a secure password
-4. **⚠️ SAVE YOUR SEED PHRASE**
+### 1. Create or Import Wallet
+Choose between creating a new wallet or importing an existing seed phrase. Crossmark browser extension is also supported. Your seed is encrypted with AES-256 and stored locally.
 
 ### 2. Fund Your Wallet
-1. Click **"Fund Wallet"** on dashboard
-2. Wait for testnet XRP (~10 XRP)
+Click Fund Wallet to receive test XRP from the testnet faucet. You'll receive 100-1000 XRP for transaction fees.
 
-### 3. Enable RLUSD (Optional)
-1. Click **"Enable RLUSD"**
-2. Creates trustline to RLUSD issuer
+### 3. Enable RLUSD
+Create a trustline to the RLUSD issuer to send and receive stablecoin payments.
 
-### 4. Verify Identity (Recommended)
-1. Go to **Verify** page
-2. Enter name, email, phone
-3. Choose Basic ($1,000) or Full (Unlimited)
+### 4. Verify Your Identity
+Complete verification to unlock higher limits and direct payments. Verification is recorded on-chain using XRPL's DID system.
 
-### 5. Send a Payment
-1. Go to **Send** page
-2. Enter amount and recipient address
-3. Add optional message
-4. Confirm and send!
+### 5. Send Payments
+Choose XRP or RLUSD, enter recipient address and amount, add an optional message, and send. Transactions settle in 3-5 seconds.
 
-### 6. Tokenize an Asset (NEW!)
-1. Go to **RWA Marketplace** → **Tokenize Asset**
-2. Select asset category (Real Estate, Commodities, etc.)
-3. Fill in asset details (name, description, value)
-4. Create token on XRPL
-5. Send tokens to anyone globally!
+### 6. Create Escrow
+Lock XRP with time or condition requirements. Time-based escrows release after a specified date. Condition-based escrows require a secret code to release.
 
-### 7. Receive RWA Tokens
-1. Create trustline to the asset issuer (automatic on receive)
-2. Receive tokenized assets from anywhere in the world
-3. View in your **RWA Portfolio**
+### 7. Tokenize Assets
+Verified users can create RWA tokens representing real-world assets. Fill in asset details and metadata, then send tokens to anyone globally.
 
-## 🏗 Architecture
+## Project Structure
 
 ```
 SigmaPay/
 ├── app/
-│   ├── page.tsx              # Landing page
-│   ├── layout.tsx            # Root layout
-│   ├── onboarding/           # Wallet setup + DID
-│   ├── dashboard/            # Main dashboard
-│   ├── send/                 # Send flow
-│   ├── receive/              # Receive & claim
-│   ├── history/              # Transaction history
-│   ├── verify/               # DID verification
-│   ├── rwa/                  # RWA Marketplace
-│   └── tokenize/             # Tokenize assets
+│   ├── api/              # Server-side API routes
+│   │   ├── faucet/       # Testnet faucet proxy
+│   │   └── price/        # CoinGecko price proxy
+│   ├── dashboard/        # Main dashboard
+│   ├── send/             # Payment flow
+│   ├── receive/          # Receive and claim checks
+│   ├── escrow/           # Escrow management
+│   ├── rwa/              # RWA marketplace
+│   ├── tokenize/         # Asset tokenization
+│   ├── verify/           # Identity verification
+│   └── history/          # Transaction history
 ├── components/
-│   ├── ui/                   # shadcn components
-│   ├── wallet/               # Wallet components
-│   ├── did/                  # DID components
-│   ├── send/                 # Send components
-│   ├── receive/              # Receive components
-│   ├── rwa/                  # RWA components
-│   └── common/               # Shared components
+│   ├── wallet/           # Wallet management
+│   ├── did/              # Verification badges
+│   ├── escrow/           # Escrow UI
+│   ├── rwa/              # RWA components
+│   └── ui/               # shadcn components
 ├── lib/
-│   ├── xrpl/                 # XRPL integration
-│   │   ├── client.ts
-│   │   ├── did.ts            # DID operations
-│   │   ├── payments.ts
-│   │   ├── checks.ts
-│   │   ├── trustline.ts
-│   │   └── rwa.ts            # RWA tokenization
-│   ├── utils/
-│   └── hooks/
-└── types/
+│   └── xrpl/             # XRPL integration
+│       ├── client.ts     # Connection management
+│       ├── payments.ts   # Payment transactions
+│       ├── checks.ts     # Check transactions
+│       ├── escrow.ts     # Escrow transactions
+│       ├── did.ts        # DID operations
+│       ├── rwa.ts        # RWA tokenization
+│       └── trustline.ts  # Trustline management
+└── types/                # TypeScript definitions
 ```
 
-## 🔗 XRPL Configuration
+## Configuration
 
 ```typescript
 // Network
-XRPL_TESTNET_URL = "wss://s.altnet.rippletest.net:51233"
+XRPL_TESTNET_URL = "wss://testnet.xrpl-labs.com"
 
-// RLUSD (40-char hex encoding for 5+ char currencies)
-RLUSD_ISSUER = "rQhWct2fTR6gPgmc8sLMdM6U8Lwrjvzzyj"
+// RLUSD Issuer (from tryrlusd.com)
+RLUSD_ISSUER = "rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV"
 RLUSD_CURRENCY = "524C555344000000000000000000000000000000"
 
 // Explorer
 EXPLORER_BASE_URL = "https://testnet.xrpl.org"
 ```
 
-## 🔐 Security
+## Security
 
 | Aspect | Implementation |
 |--------|----------------|
-| **Seed Storage** | AES-256 encrypted in localStorage |
-| **Password** | Never stored; used only for encryption |
-| **Signing** | All signing happens client-side |
-| **Keys** | Never leave the browser |
-| **RWA Issuance** | Verification required |
+| Key Storage | AES-256 encrypted in browser localStorage |
+| Password | Never stored, used only for encryption/decryption |
+| Transaction Signing | All signing happens client-side |
+| Private Keys | Never transmitted to any server |
+| RWA Issuance | Requires identity verification |
 
-> ⚠️ **Hackathon MVP**: For production, consider hardware wallets, multi-sig, and secure enclave storage.
+This is a hackathon MVP. Production deployment would add hardware wallet support, multi-signature accounts, and secure enclave storage.
 
-## 🗺 Roadmap
+## Verification
 
-### Phase 1: MVP (Current) ✅
-- [x] Wallet creation/import
-- [x] RLUSD integration
-- [x] Direct payments
-- [x] Claimable checks
-- [x] DID verification
-- [x] Permissioned flows
-- [x] Transaction history
-- [x] Mobile-responsive UI
-- [x] **RWA Marketplace**
-- [x] **Asset Tokenization**
-- [x] **Global RWA Transfer**
+All transactions are verifiable on the public XRPL testnet explorer at https://testnet.xrpl.org
 
-### Phase 2: Enhanced Features
-- [ ] Multi-currency support
-- [ ] Contact book
-- [ ] Push notifications
-- [ ] Recurring payments
-- [ ] RWA fractional trading
+## Resources
 
-### Phase 3: Institutional
-- [ ] Multi-signature wallets
-- [ ] Business API
-- [ ] Compliance tools
-- [ ] Fiat on/off ramps
-- [ ] RWA marketplace with order book
-
-## 🌐 Resources
-
-- [Ripple DevRel Resources](https://linktr.ee/rippledevrel)
-- [RLUSD Stablecoin Faucet](https://tryrlusd.com)
 - [XRPL Documentation](https://xrpl.org/docs)
+- [RLUSD Testnet Faucet](https://tryrlusd.com)
+- [Ripple DevRel Resources](https://linktr.ee/rippledevrel)
 - [XRPL Testnet Explorer](https://testnet.xrpl.org)
 
-## 👥 Team
+## Team
 
-**NUS FinTech Summit 2026 Hackathon**
+Built for the NUS FinTech Summit 2026 Hackathon
 
-## 📄 License
+## License
 
-MIT License - see LICENSE file for details.
-
----
-
-<div align="center">
-
-**Built with 💜 for the NUS FinTech Summit 2026 Hackathon**
-
-Powered by [XRP Ledger](https://xrpl.org) • [RLUSD](https://ripple.com)
-
-</div>
+MIT License
