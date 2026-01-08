@@ -198,16 +198,15 @@ export async function issueRWAToken(
       };
 
       console.log("Preparing transaction...");
-      const prepared = await client.autofill(registration, {
-        maxLedgerVersionOffset: 75, // Increase timeout from default ~20 to 75 ledgers (~5 minutes)
-      });
+      const prepared = await client.autofill(registration);
+      // Increase LastLedgerSequence for longer timeout (~5 minutes instead of ~1 minute)
+      if (prepared.LastLedgerSequence) {
+        prepared.LastLedgerSequence = prepared.LastLedgerSequence + 55; // Add ~55 more ledgers
+      }
       console.log("Transaction prepared, signing...");
       const signed = wallet.sign(prepared);
       console.log("Transaction signed, submitting to ledger...");
-      const result = await client.submitAndWait(signed.tx_blob, {
-        autofill: false,
-        failHard: false,
-      });
+      const result = await client.submitAndWait(signed.tx_blob);
 
       const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
       console.log("Transaction result:", txResult);

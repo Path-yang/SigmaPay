@@ -72,16 +72,16 @@ export async function createDID(
     };
 
     console.log("Preparing DIDSet transaction...");
-    const prepared = await client.autofill(didSet, {
-      maxLedgerVersionOffset: 75, // Increase timeout to ~5 minutes
-    });
+    const prepared = await client.autofill(didSet);
+    // Increase LastLedgerSequence for longer timeout (~5 minutes instead of ~1 minute)
+    const preparedWithTimeout = prepared as typeof prepared & { LastLedgerSequence?: number };
+    if (preparedWithTimeout.LastLedgerSequence) {
+      preparedWithTimeout.LastLedgerSequence = preparedWithTimeout.LastLedgerSequence + 55; // Add ~55 more ledgers
+    }
     console.log("Transaction prepared, signing...");
-    const signed = wallet.sign(prepared);
+    const signed = wallet.sign(preparedWithTimeout);
     console.log("Transaction signed, submitting...");
-    const result = await client.submitAndWait(signed.tx_blob, {
-      autofill: false,
-      failHard: false,
-    });
+    const result = await client.submitAndWait(signed.tx_blob);
 
     const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
     console.log("Transaction result:", txResult);
