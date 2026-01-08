@@ -1,14 +1,17 @@
 # SigmaPay Σ
 
-> Send money home instantly. No hidden fees. Verified & secure.
+> Send money & real-world assets home instantly. No hidden fees. Verified & secure.
 
 ## 🎯 Problem
 
-Sending small amounts of money internationally (remittances) is expensive due to high flat fees and slow processing times. Migrant workers often pay 5-10% in fees just to send money to their families.
+Sending small amounts of money internationally (remittances) is expensive due to high flat fees and slow processing times. Migrant workers often pay 5-10% in fees just to send money to their families. Additionally, transferring tokenized real-world assets across borders is complex and inaccessible.
 
 ## 💡 Solution
 
-SigmaPay is a mobile-first web app that leverages the XRP Ledger to enable instant, low-cost international transfers using RLUSD stablecoin. With built-in decentralized identity (DID) verification, users get higher limits and instant transfers while maintaining compliance.
+SigmaPay is a mobile-first web app that leverages the XRP Ledger to enable:
+- **Instant, low-cost international transfers** using RLUSD stablecoin
+- **RWA Marketplace** for tokenizing and transferring real-world assets globally
+- **DID-based identity verification** for higher limits and compliance
 
 ## 🔧 XRPL Features Used
 
@@ -19,15 +22,36 @@ SigmaPay is a mobile-first web app that leverages the XRP Ledger to enable insta
 | **Checks** | Claimable payments for unverified users |
 | **DID** | On-chain identity verification |
 | **Credentials** | Permissioned flows based on verification level |
-| **Memos** | Personal messages attached to transfers |
+| **Memos** | Personal messages and RWA metadata |
+| **Trustlines/IOUs** | Real-world asset tokenization |
+
+## 🏠 RWA Marketplace (NEW!)
+
+Tokenize and transfer real-world assets globally:
+
+| Asset Category | Examples |
+|----------------|----------|
+| 🏠 **Real Estate** | Fractional property ownership |
+| 🥇 **Commodities** | Tokenized gold, silver, oil |
+| 🎨 **Art** | Artwork & collectibles |
+| 📄 **Trade Finance** | Invoices, receivables |
+| 🎓 **Credentials** | Certificates, licenses |
+| 📈 **Securities** | Stocks, bonds |
+
+### RWA Features
+- **Tokenize Assets** - Create blockchain-backed tokens representing physical assets
+- **Global Transfer** - Send RWA tokens to anyone worldwide in 3-5 seconds
+- **Verification Required** - Only verified users can issue RWA tokens (trust & compliance)
+- **Rich Metadata** - Asset details, valuations, documents stored on-chain
+- **Marketplace** - Browse and receive tokenized assets from other issuers
 
 ## 🔐 Verification Levels
 
-| Level | Send Limit | Payment Method |
-|-------|------------|----------------|
-| Unverified | $100 | Claimable Checks |
-| Basic | $1,000 | Direct Payments |
-| Verified | Unlimited | Direct Payments |
+| Level | Send Limit | Payment Method | RWA Issuance |
+|-------|------------|----------------|--------------|
+| Unverified | $100 | Claimable Checks | ❌ |
+| Basic | $1,000 | Direct Payments | ✅ |
+| Verified | Unlimited | Direct Payments | ✅ |
 
 ## 🛠️ Tech Stack
 
@@ -49,10 +73,12 @@ SigmaPay is a mobile-first web app that leverages the XRP Ledger to enable insta
 - 💬 **Personal Messages** - Attach notes via XRPL memos
 - 📱 **QR Code Sharing** - Easy address sharing
 
-### Verification Tiers
-- **Unverified**: $100 limit, sends via Checks
-- **Basic Verified**: $1,000 limit, direct payments
-- **Fully Verified**: Unlimited, instant transfers
+### RWA Marketplace
+- 🏭 **Tokenize Assets** - Create RWA tokens with rich metadata
+- 🌍 **Global Transfer** - Send RWA tokens worldwide instantly
+- 📊 **Portfolio View** - Track your tokenized asset holdings
+- 🛒 **Marketplace** - Browse available RWA tokens
+- 🔒 **Compliance** - Verification required for issuance
 
 ## 🚀 Quick Start
 
@@ -97,11 +123,11 @@ npm start
 1. Click **"Fund Wallet"** on dashboard
 2. Wait for testnet XRP (~10 XRP)
 
-### 3. Enable RLUSD
+### 3. Enable RLUSD (Optional)
 1. Click **"Enable RLUSD"**
 2. Creates trustline to RLUSD issuer
 
-### 4. Verify Identity (Optional but Recommended)
+### 4. Verify Identity (Recommended)
 1. Go to **Verify** page
 2. Enter name, email, phone
 3. Choose Basic ($1,000) or Full (Unlimited)
@@ -111,6 +137,18 @@ npm start
 2. Enter amount and recipient address
 3. Add optional message
 4. Confirm and send!
+
+### 6. Tokenize an Asset (NEW!)
+1. Go to **RWA Marketplace** → **Tokenize Asset**
+2. Select asset category (Real Estate, Commodities, etc.)
+3. Fill in asset details (name, description, value)
+4. Create token on XRPL
+5. Send tokens to anyone globally!
+
+### 7. Receive RWA Tokens
+1. Create trustline to the asset issuer (automatic on receive)
+2. Receive tokenized assets from anywhere in the world
+3. View in your **RWA Portfolio**
 
 ## 🏗 Architecture
 
@@ -124,13 +162,16 @@ SigmaPay/
 │   ├── send/                 # Send flow
 │   ├── receive/              # Receive & claim
 │   ├── history/              # Transaction history
-│   └── verify/               # DID verification
+│   ├── verify/               # DID verification
+│   ├── rwa/                  # RWA Marketplace
+│   └── tokenize/             # Tokenize assets
 ├── components/
 │   ├── ui/                   # shadcn components
 │   ├── wallet/               # Wallet components
 │   ├── did/                  # DID components
 │   ├── send/                 # Send components
 │   ├── receive/              # Receive components
+│   ├── rwa/                  # RWA components
 │   └── common/               # Shared components
 ├── lib/
 │   ├── xrpl/                 # XRPL integration
@@ -138,7 +179,8 @@ SigmaPay/
 │   │   ├── did.ts            # DID operations
 │   │   ├── payments.ts
 │   │   ├── checks.ts
-│   │   └── trustline.ts
+│   │   ├── trustline.ts
+│   │   └── rwa.ts            # RWA tokenization
 │   ├── utils/
 │   └── hooks/
 └── types/
@@ -150,9 +192,9 @@ SigmaPay/
 // Network
 XRPL_TESTNET_URL = "wss://s.altnet.rippletest.net:51233"
 
-// RLUSD
+// RLUSD (40-char hex encoding for 5+ char currencies)
 RLUSD_ISSUER = "rQhWct2fTR6gPgmc8sLMdM6U8Lwrjvzzyj"
-RLUSD_CURRENCY = "RLUSD"
+RLUSD_CURRENCY = "524C555344000000000000000000000000000000"
 
 // Explorer
 EXPLORER_BASE_URL = "https://testnet.xrpl.org"
@@ -166,6 +208,7 @@ EXPLORER_BASE_URL = "https://testnet.xrpl.org"
 | **Password** | Never stored; used only for encryption |
 | **Signing** | All signing happens client-side |
 | **Keys** | Never leave the browser |
+| **RWA Issuance** | Verification required |
 
 > ⚠️ **Hackathon MVP**: For production, consider hardware wallets, multi-sig, and secure enclave storage.
 
@@ -180,18 +223,30 @@ EXPLORER_BASE_URL = "https://testnet.xrpl.org"
 - [x] Permissioned flows
 - [x] Transaction history
 - [x] Mobile-responsive UI
+- [x] **RWA Marketplace**
+- [x] **Asset Tokenization**
+- [x] **Global RWA Transfer**
 
 ### Phase 2: Enhanced Features
 - [ ] Multi-currency support
 - [ ] Contact book
 - [ ] Push notifications
 - [ ] Recurring payments
+- [ ] RWA fractional trading
 
 ### Phase 3: Institutional
 - [ ] Multi-signature wallets
 - [ ] Business API
 - [ ] Compliance tools
 - [ ] Fiat on/off ramps
+- [ ] RWA marketplace with order book
+
+## 🌐 Resources
+
+- [Ripple DevRel Resources](https://linktr.ee/rippledevrel)
+- [RLUSD Stablecoin Faucet](https://tryrlusd.com)
+- [XRPL Documentation](https://xrpl.org/docs)
+- [XRPL Testnet Explorer](https://testnet.xrpl.org)
 
 ## 👥 Team
 

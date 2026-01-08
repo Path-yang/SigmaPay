@@ -15,7 +15,8 @@ import {
     Wallet,
     Menu,
     X,
-    Shield
+    Shield,
+    Briefcase
 } from "lucide-react";
 import { useState } from "react";
 
@@ -23,6 +24,7 @@ const navItems = [
     { href: "/dashboard", label: "Home", icon: Home },
     { href: "/send", label: "Send", icon: Send },
     { href: "/receive", label: "Receive", icon: Inbox },
+    { href: "/rwa", label: "RWA", icon: Briefcase },
     { href: "/history", label: "History", icon: Clock },
 ];
 
@@ -146,6 +148,13 @@ export function Navbar() {
                             <p className="text-xs text-slate-500 mb-1">Wallet Address</p>
                             <p className="text-sm font-mono text-slate-700 truncate">{address}</p>
                         </div>
+
+                        <Link href="/rwa" onClick={() => setMobileMenuOpen(false)}>
+                            <Button variant="outline" className="w-full mb-2">
+                                <Briefcase className="w-4 h-4 mr-2" />
+                                RWA Marketplace
+                            </Button>
+                        </Link>
 
                         <Link href="/verify" onClick={() => setMobileMenuOpen(false)}>
                             <Button variant="outline" className="w-full mb-4">
