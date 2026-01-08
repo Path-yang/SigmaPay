@@ -55,6 +55,8 @@ export default function RWAPage() {
       
       setLoading(true);
       try {
+        console.log("[RWA Page] Loading tokens for address:", address);
+        
         // Get user's RWA tokens
         const tokens = await getRWATokens(address);
         console.log("[RWA Page] Loaded tokens:", tokens);
@@ -63,11 +65,20 @@ export default function RWAPage() {
         // Get marketplace tokens (all issued tokens)
         const marketplace = getAllMarketplaceTokens();
         console.log("[RWA Page] Marketplace tokens:", marketplace);
+        
         // Add demo tokens if marketplace is empty
-        setMarketplaceTokens(marketplace.length > 0 ? marketplace : DEMO_RWA_TOKENS);
+        const finalMarketplace = marketplace.length > 0 ? marketplace : DEMO_RWA_TOKENS;
+        setMarketplaceTokens(finalMarketplace);
+        
       } catch (error) {
         console.error("Failed to load RWA tokens:", error);
+        
+        // Fallback to demo tokens on error
         setMarketplaceTokens(DEMO_RWA_TOKENS);
+        setMyTokens([]);
+        
+        // Don't show error toast on initial load - just log it
+        console.warn("Using demo tokens due to loading error");
       } finally {
         setLoading(false);
       }
@@ -78,6 +89,7 @@ export default function RWAPage() {
     // Refresh tokens when page becomes visible (e.g., returning from tokenize page)
     const handleVisibilityChange = () => {
       if (!document.hidden && address) {
+        console.log("[RWA Page] Page became visible, refreshing tokens");
         loadTokens();
       }
     };
@@ -90,18 +102,33 @@ export default function RWAPage() {
   }, [address]);
 
   const handleSend = (token: RWAToken) => {
-    setSelectedToken(token);
-    setShowSendDialog(true);
+    try {
+      console.log("[RWA Page] Opening send dialog for token:", token.currencyDisplay);
+      setSelectedToken(token);
+      setShowSendDialog(true);
+    } catch (error) {
+      console.error("Error opening send dialog:", error);
+    }
   };
 
   const handleSendSuccess = () => {
-    setShowSendDialog(false);
-    setSelectedToken(null);
-    // Refresh tokens after a short delay to allow ledger to update
-    if (address) {
+    try {
+      setShowSendDialog(false);
+      setSelectedToken(null);
+      
+      // Refresh tokens after a short delay to allow ledger to update
       setTimeout(() => {
-        getRWATokens(address).then(setMyTokens).catch(console.error);
+        if (address) {
+          console.log("[RWA Page] Refreshing tokens after successful send");
+          getRWATokens(address).then(tokens => {
+            setMyTokens(tokens);
+          }).catch(error => {
+            console.error("Failed to refresh tokens after send:", error);
+          });
+        }
       }, 2000);
+    } catch (error) {
+      console.error("Error handling send success:", error);
     }
   };
 

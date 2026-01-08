@@ -10,13 +10,16 @@ import { useWallet } from "@/components/wallet/WalletProvider";
 import { toast } from "@/components/ui/use-toast";
 import { RWAToken, sendRWAToken } from "@/lib/xrpl/rwa";
 import { getExplorerTxLink } from "@/lib/xrpl/constants";
+import { copyTokenInfoToClipboard, createShareMessage } from "@/lib/utils/share-token";
 import { 
   Loader2, 
   Check, 
   Send,
   Globe,
   ArrowRight,
-  AlertTriangle
+  AlertTriangle,
+  Share2,
+  Copy
 } from "lucide-react";
 
 interface SendRWAFormProps {
@@ -34,6 +37,7 @@ export function SendRWAForm({ token, onSuccess, onCancel }: SendRWAFormProps) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [txHash, setTxHash] = useState("");
+  const [showShareOptions, setShowShareOptions] = useState(false);
 
   // For issuers, balance might be totalSupply (from metadata)
   // For recipients, balance is actual held tokens
@@ -45,11 +49,65 @@ export function SendRWAForm({ token, onSuccess, onCancel }: SendRWAFormProps) {
   // Check if user is the issuer
   const isIssuer = token.issuer === wallet?.classicAddress;
 
+  const handleShareToken = async () => {
+    try {
+      if (typeof window === "undefined") {
+        toast({
+          title: "Share Not Available",
+          description: "Token sharing is not available in this environment.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const baseUrl = window.location.origin;
+      const success = await copyTokenInfoToClipboard(token, baseUrl);
+      
+      if (success) {
+        toast({
+          title: "Token Info Copied!",
+          description: "Share this information with the recipient so they can create a trustline.",
+          variant: "default",
+        });
+      } else {
+        // Fallback: show the share message
+        const shareMessage = createShareMessage(token, "", baseUrl);
+        console.log("Share message:", shareMessage);
+        toast({
+          title: "Share Token Info",
+          description: "Token information is available in the browser console. Copy and share it with the recipient.",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error("Share token error:", error);
+      toast({
+        title: "Share Failed",
+        description: "Could not copy token information to clipboard.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!wallet || !isValidAmount || !isValidRecipient) return;
+    if (!wallet || !isValidAmount || !isValidRecipient) {
+      toast({
+        title: "Invalid Input",
+        description: "Please check your recipient address and amount.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setLoading(true);
     try {
+      console.log("Starting RWA token transfer:", {
+        recipient,
+        amount,
+        currency: token.currency,
+        issuer: token.issuer === "demo" ? wallet.classicAddress : token.issuer,
+      });
+
       const result = await sendRWAToken(
         wallet,
         recipient,
@@ -69,13 +127,58 @@ export function SendRWAForm({ token, onSuccess, onCancel }: SendRWAFormProps) {
         });
         onSuccess?.(result.hash || "");
       } else {
-        toast({ title: "Transfer Failed", description: result.error, variant: "destructive" });
+        // Handle different error types with better messaging
+        let title = "Transfer Failed";
+        let description = result.error || "Unknown error occurred";
+        
+        if (result.needsTrustline) {
+          title = "Trustline Required";
+          description = result.error + "\n\nShare this token info with the recipient:\n• Token: " + token.currencyDisplay + "\n• Issuer: " + token.issuer.substring(0, 12) + "...";
+        } else if (result.error?.includes("Insufficient balance")) {
+          title = "Insufficient Balance";
+        } else if (result.error?.includes("Invalid recipient")) {
+          title = "Invalid Address";
+        }
+        
+        toast({ 
+          title, 
+          description, 
+          variant: "destructive",
+          duration: 10000 
+        });
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to send";
+      console.error("Transfer error:", error);
+      
+      // Handle different types of errors with appropriate messaging
+      let title = "Transfer Failed";
+      let description = errorMessage;
+      let variant: "destructive" | "default" = "destructive";
+      
+      if (errorMessage.includes("does not have a trustline")) {
+        title = "Trustline Required";
+        description = errorMessage + "\n\nThe recipient needs to:\n1. Go to RWA Marketplace\n2. Find your token\n3. Click 'Add to Wallet' to create a trustline\n4. Then you can send them the tokens";
+      } else if (errorMessage.includes("Insufficient balance")) {
+        title = "Insufficient Balance";
+        description = errorMessage;
+      } else if (errorMessage.includes("Invalid recipient")) {
+        title = "Invalid Address";
+        description = errorMessage;
+      } else if (errorMessage.includes("submitted") && errorMessage.includes("not confirmed")) {
+        title = "Transaction Submitted";
+        description = errorMessage;
+        variant = "default";
+      } else if (errorMessage.includes("timeout")) {
+        title = "Network Timeout";
+        description = "The transaction timed out due to network congestion. Please try again in a few moments.";
+      }
+      
       toast({ 
-        title: "Error", 
-        description: error instanceof Error ? error.message : "Failed to send", 
-        variant: "destructive" 
+        title, 
+        description,
+        variant,
+        duration: 12000 // Show longer for error messages
       });
     } finally {
       setLoading(false);
@@ -226,6 +329,26 @@ export function SendRWAForm({ token, onSuccess, onCancel }: SendRWAFormProps) {
             Estimated value: <strong>${(numAmount * parseFloat(token.metadata.unitValue)).toLocaleString()}</strong>
           </div>
         )}
+
+        {/* Trustline help */}
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+          <div className="flex items-start gap-2">
+            <Globe className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="font-semibold mb-1">Recipient needs a trustline</p>
+              <p className="text-xs">The recipient must create a trustline for this token before they can receive it.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleShareToken}
+                className="mt-2 h-7 text-xs"
+              >
+                <Share2 className="w-3 h-3 mr-1" />
+                Share Token Info
+              </Button>
+            </div>
+          </div>
+        </div>
 
         {/* Actions */}
         <div className="flex gap-2 pt-2">

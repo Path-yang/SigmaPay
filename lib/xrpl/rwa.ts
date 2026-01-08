@@ -8,7 +8,7 @@
  * - Metadata: Stored in transaction memos
  */
 
-import { Payment, TrustSet, xrpToDrops } from "xrpl";
+import { Payment, TrustSet } from "xrpl";
 import { getClient } from "./client";
 import { VerificationLevel } from "./constants";
 import { getVerificationLevel } from "./did";
@@ -462,6 +462,7 @@ export async function issueRWAToken(
 
 /**
  * Create trustline to receive RWA tokens from an issuer
+ * Enhanced version with better error handling and validation
  */
 export async function createRWATrustline(
   wallet: Wallet,
@@ -470,7 +471,26 @@ export async function createRWATrustline(
   limit: string = "1000000000"
 ): Promise<{ success: boolean; hash?: string; error?: string }> {
   try {
+    console.log("Creating RWA trustline:", { currency, issuer, limit });
     const client = await getClient();
+
+    // Check if trustline already exists
+    const existingTrustline = await checkTrustlineExists(wallet.classicAddress, currency, issuer);
+    if (existingTrustline) {
+      return {
+        success: false,
+        error: "Trustline already exists for this token.",
+      };
+    }
+
+    // Validate limit
+    const numLimit = parseFloat(limit);
+    if (isNaN(numLimit) || numLimit <= 0) {
+      return {
+        success: false,
+        error: "Invalid trustline limit. Please enter a positive number.",
+      };
+    }
 
     const trustSet: TrustSet = {
       TransactionType: "TrustSet",
@@ -482,21 +502,99 @@ export async function createRWATrustline(
       },
     };
 
-    const prepared = await client.autofill(trustSet);
+    console.log("Preparing trustline transaction...");
+    
+    // Add timeout for autofill
+    const autofillPromise = client.autofill(trustSet);
+    const autofillTimeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Transaction preparation timed out. Please try again.")), 30000);
+    });
+    
+    const prepared = await Promise.race([autofillPromise, autofillTimeout]);
+    
+    if (prepared.LastLedgerSequence) {
+      prepared.LastLedgerSequence = prepared.LastLedgerSequence + 20;
+    }
+
     const signed = wallet.sign(prepared);
-    const result = await client.submitAndWait(signed.tx_blob);
+    console.log("Submitting trustline transaction...");
+    
+    // Use submit and poll approach for better reliability
+    const submitResponse = await client.submit(signed.tx_blob);
+    const submittedHash = submitResponse.result.tx_json?.hash || 
+                         (submitResponse.result as any).hash || 
+                         signed.hash || "";
 
-    const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
+    // Check engine result
+    const engineResult = submitResponse.result.engine_result;
+    if (engineResult !== "tesSUCCESS" && engineResult !== "terQUEUED" && !engineResult.startsWith("ter")) {
+      let errorMessage = `Transaction rejected: ${engineResult}`;
+      
+      if (engineResult === "tecUNFUNDED") {
+        errorMessage = "Insufficient XRP balance to pay transaction fees (~0.00001 XRP required).";
+      } else if (engineResult === "tecNO_DST") {
+        errorMessage = "Issuer account not found or invalid.";
+      } else if (engineResult === "temREDUNDANT") {
+        errorMessage = "Trustline already exists for this token.";
+      } else if (engineResult === "temBAD_CURRENCY") {
+        errorMessage = "Invalid currency code.";
+      }
+      
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
 
-    if (txResult.meta?.TransactionResult === "tesSUCCESS") {
-      return { success: true, hash: txResult.hash };
+    // Poll for confirmation
+    console.log("Polling for trustline confirmation...");
+    const startTime = Date.now();
+    const maxPollTimeout = 60000; // 1 minute for trustlines
+    let pollInterval = 2000;
+    
+    while (Date.now() - startTime < maxPollTimeout) {
+      try {
+        const txResult = await client.request({
+          command: "tx",
+          transaction: submittedHash,
+        });
+        
+        if (txResult.result && txResult.result.validated) {
+          const result = txResult.result as { meta?: { TransactionResult?: string }; hash?: string };
+          
+          if (result.meta?.TransactionResult === "tesSUCCESS") {
+            console.log("✅ Trustline created successfully!");
+            return { success: true, hash: result.hash || submittedHash };
+          } else {
+            const errorCode = result.meta?.TransactionResult || "Failed to create trustline";
+            let errorMessage = errorCode;
+            
+            if (errorCode === "tecUNFUNDED") {
+              errorMessage = "Insufficient XRP balance to pay transaction fees.";
+            } else if (errorCode === "tecNO_DST") {
+              errorMessage = "Issuer account not found.";
+            }
+            
+            return {
+              success: false,
+              error: `Trustline creation failed: ${errorMessage}`,
+            };
+          }
+        }
+      } catch (pollError) {
+        // Continue polling
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
     }
 
     return {
       success: false,
-      error: txResult.meta?.TransactionResult || "Failed to create trustline",
+      error: "Trustline transaction submitted but not confirmed within timeout. Please check your account later.",
     };
+
   } catch (error) {
+    console.error("Error creating RWA trustline:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to create trustline",
@@ -532,7 +630,7 @@ async function checkTrustlineExists(
 
 /**
  * Send RWA tokens to a recipient
- * This function handles trustline creation if needed and token issuance
+ * Enhanced version with better error handling and trustline management
  */
 export async function sendRWAToken(
   wallet: Wallet,
@@ -541,102 +639,278 @@ export async function sendRWAToken(
   amount: string,
   issuer: string,
   memo?: string
-): Promise<{ success: boolean; hash?: string; error?: string }> {
-  try {
-    const client = await getClient();
+): Promise<{ success: boolean; hash?: string; error?: string; needsTrustline?: boolean }> {
+  const MAX_RETRIES = 2;
+  let lastError = "";
 
-    // Check if recipient has a trustline to the issuer
-    // If not, we need to create one first (or inform the user)
-    const hasTrustline = await checkTrustlineExists(recipient, currency, issuer);
-    
-    if (!hasTrustline) {
-      // Recipient needs a trustline to receive tokens
-      // Note: We can't create a trustline for another user - they must do it themselves
-      // However, we can try to send anyway - XRPL will reject if no trustline
-      // OR we can return an error asking the recipient to create a trustline first
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`=== Starting RWA Token Transfer (Attempt ${attempt}/${MAX_RETRIES}) ===`);
+      console.log("From:", wallet.classicAddress);
+      console.log("To:", recipient);
+      console.log("Amount:", amount, currency);
+      console.log("Issuer:", issuer);
+
+      const client = await getClient();
+
+      // Validate amount
+      const numAmount = parseFloat(amount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        return {
+          success: false,
+          error: "Invalid amount. Please enter a positive number.",
+        };
+      }
+
+      // Check if recipient address is valid
+      if (!recipient.startsWith("r") || recipient.length < 25) {
+        return {
+          success: false,
+          error: "Invalid recipient address. XRPL addresses start with 'r' and are at least 25 characters long.",
+        };
+      }
+
+      // Check if sender has sufficient balance (for non-issuers)
+      if (wallet.classicAddress !== issuer) {
+        try {
+          const senderTokens = await getRWATokens(wallet.classicAddress);
+          const senderToken = senderTokens.find(t => t.currency === currency && t.issuer === issuer);
+          
+          if (!senderToken || parseFloat(senderToken.balance) < numAmount) {
+            return {
+              success: false,
+              error: `Insufficient balance. You have ${senderToken?.balance || "0"} ${currency}, but trying to send ${amount}.`,
+            };
+          }
+        } catch (error) {
+          console.warn("Could not verify sender balance:", error);
+          // Continue anyway - let XRPL handle the validation
+        }
+      }
+
+      // Check if recipient has a trustline to the issuer
+      const hasTrustline = await checkTrustlineExists(recipient, currency, issuer);
       
-      // For better UX, let's try to send anyway - if it fails, we'll get a clear error
-      console.log(`Warning: Recipient ${recipient} may not have a trustline for ${currency} from ${issuer}`);
-      console.log("Attempting to send - XRPL will reject if trustline is missing");
-    }
+      if (!hasTrustline) {
+        console.log(`Warning: Recipient ${recipient} does not have a trustline for ${currency} from ${issuer}`);
+        
+        // Return specific error for missing trustline
+        return {
+          success: false,
+          needsTrustline: true,
+          error: `The recipient does not have a trustline for ${currency}. They need to create a trustline to ${issuer.substring(0, 8)}... before they can receive this token. Please ask them to add this token to their wallet first.`,
+        };
+      }
 
-    const payment: Payment = {
-      TransactionType: "Payment",
-      Account: wallet.classicAddress,
-      Destination: recipient,
-      Amount: {
-        currency,
-        issuer,
-        value: amount,
-      },
-    };
-
-    if (memo) {
-      payment.Memos = [
-        {
-          Memo: {
-            MemoType: Buffer.from("rwa_transfer", "utf8").toString("hex").toUpperCase(),
-            MemoData: Buffer.from(memo, "utf8").toString("hex").toUpperCase(),
-          },
+      // Create the payment transaction
+      const payment: Payment = {
+        TransactionType: "Payment",
+        Account: wallet.classicAddress,
+        Destination: recipient,
+        Amount: {
+          currency,
+          issuer,
+          value: amount,
         },
-      ];
+      };
+
+      // Add memo if provided
+      if (memo) {
+        payment.Memos = [
+          {
+            Memo: {
+              MemoType: Buffer.from("rwa_transfer", "utf8").toString("hex").toUpperCase(),
+              MemoData: Buffer.from(memo.substring(0, 1000), "utf8").toString("hex").toUpperCase(), // Limit memo size
+            },
+          },
+        ];
+      }
+
+      console.log("Preparing payment transaction...");
+      
+      // Add timeout for autofill
+      const autofillPromise = client.autofill(payment);
+      const autofillTimeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Transaction preparation timed out. Please try again.")), 30000);
+      });
+      
+      const prepared = await Promise.race([autofillPromise, autofillTimeout]);
+      
+      // Increase timeout for longer wait
+      if (prepared.LastLedgerSequence) {
+        prepared.LastLedgerSequence = prepared.LastLedgerSequence + 30; // Increased timeout
+      }
+      
+      console.log("Transaction prepared, signing...");
+      const signed = wallet.sign(prepared);
+      const txHash = signed.hash || (signed as any).tx?.hash;
+      console.log("Transaction signed, hash:", txHash);
+      console.log("Submitting payment transaction...");
+      
+      // Submit with polling approach like token creation
+      let result;
+      let submittedHash: string = txHash || "";
+      
+      try {
+        // Step 1: Submit the transaction
+        const submitResponse = await client.submit(signed.tx_blob);
+        console.log("Transaction submitted, response:", submitResponse);
+        
+        // Get transaction hash
+        submittedHash = submitResponse.result.tx_json?.hash || 
+                       (submitResponse.result as any).hash || 
+                       txHash || 
+                       "";
+        
+        if (!submittedHash) {
+          throw new Error("Could not determine transaction hash from submission response");
+        }
+        
+        // Check engine result
+        const engineResult = submitResponse.result.engine_result;
+        console.log("Engine result:", engineResult);
+        
+        if (engineResult !== "tesSUCCESS" && engineResult !== "terQUEUED" && !engineResult.startsWith("ter")) {
+          // Transaction was rejected immediately
+          let errorMessage = `Transaction rejected: ${engineResult}`;
+          
+          if (engineResult === "tecNO_LINE") {
+            errorMessage = `Recipient does not have a trustline for this token. They need to create a trustline to ${issuer.substring(0, 8)}... first.`;
+          } else if (engineResult === "tecPATH_PARTIAL") {
+            errorMessage = "Cannot find a path to send this token. The recipient may need a trustline.";
+          } else if (engineResult === "tecUNFUNDED_PAYMENT") {
+            errorMessage = "Insufficient token balance to complete this transfer.";
+          } else if (engineResult === "tecUNFUNDED") {
+            errorMessage = "Insufficient XRP balance to pay transaction fees (~0.00001 XRP required).";
+          } else if (engineResult === "tecNO_DST") {
+            errorMessage = "Recipient account not found or not activated.";
+          } else if (engineResult === "tecDST_TAG_NEEDED") {
+            errorMessage = "Recipient account requires a destination tag.";
+          }
+          
+          throw new Error(errorMessage);
+        }
+        
+        // Step 2: Poll for confirmation
+        console.log("Polling for transaction confirmation...");
+        const startTime = Date.now();
+        const maxPollTimeout = 120000; // 2 minutes
+        let pollInterval = 2000; // Start with 2 seconds
+        const maxPollInterval = 6000; // Max 6 seconds
+        let pollCount = 0;
+        
+        while (Date.now() - startTime < maxPollTimeout) {
+          pollCount++;
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          console.log(`Poll attempt ${pollCount} (${elapsed}s elapsed)...`);
+          
+          try {
+            const txResult = await client.request({
+              command: "tx",
+              transaction: submittedHash,
+            });
+            
+            if (txResult.result && txResult.result.validated) {
+              console.log(`✅ Transaction validated after ${elapsed} seconds!`);
+              result = { result: txResult.result };
+              break;
+            } else {
+              console.log(`Transaction found but not yet validated (${elapsed}s), waiting...`);
+            }
+          } catch (pollError: any) {
+            const errorCode = pollError?.data?.error || pollError?.error || "";
+            if (errorCode === "txnNotFound" || errorCode.includes("not found")) {
+              console.log(`Transaction not found yet (${elapsed}s), continuing to poll...`);
+            } else {
+              console.log(`Polling error (will retry):`, errorCode);
+            }
+          }
+          
+          // Wait before next poll
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+          pollInterval = Math.min(pollInterval * 1.2, maxPollInterval);
+        }
+        
+        if (!result) {
+          return {
+            success: false,
+            error: `Transaction submitted (${submittedHash}) but not confirmed within 2 minutes. This may be due to network congestion. Please check the transaction status later or try again.`,
+          };
+        }
+        
+      } catch (submitError) {
+        const errorMsg = submitError instanceof Error ? submitError.message : "Failed to submit transaction";
+        console.error(`❌ Transaction submission error (attempt ${attempt}):`, errorMsg);
+        
+        // If it's a timeout and we have retries left, throw to trigger retry
+        if (errorMsg.includes("timeout") && attempt < MAX_RETRIES) {
+          lastError = errorMsg;
+          continue; // Retry
+        }
+        
+        throw new Error(errorMsg);
+      }
+
+      // Process the result
+      const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
+      console.log("Payment result:", txResult);
+
+      // Get hash from result
+      const finalHash = txResult.hash || submittedHash || txHash || "";
+
+      if (txResult.meta?.TransactionResult === "tesSUCCESS") {
+        console.log("✅ RWA token transfer successful!");
+        return { success: true, hash: finalHash };
+      }
+
+      // Handle failure
+      const errorCode = txResult.meta?.TransactionResult || "Failed to send RWA token";
+      let errorMessage = errorCode;
+      
+      if (errorCode === "tecNO_LINE") {
+        errorMessage = `Recipient ${recipient.substring(0, 8)}... does not have a trustline for this token. They need to create a trustline to ${issuer.substring(0, 8)}... first.`;
+      } else if (errorCode === "tecPATH_PARTIAL") {
+        errorMessage = "Cannot find a path to send this token. The recipient may need a trustline.";
+      } else if (errorCode === "tecUNFUNDED_PAYMENT") {
+        errorMessage = "Insufficient token balance to complete this transfer.";
+      } else if (errorCode === "tecUNFUNDED") {
+        errorMessage = "Insufficient XRP balance to pay transaction fees.";
+      } else if (errorCode === "tecNO_DST") {
+        errorMessage = "Destination account not found or not activated.";
+      } else if (errorCode === "tecDST_TAG_NEEDED") {
+        errorMessage = "Destination account requires a destination tag.";
+      }
+
+      return {
+        success: false,
+        error: errorMessage,
+      };
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to send RWA token";
+      console.error(`Error sending RWA token (attempt ${attempt}):`, errorMessage);
+      lastError = errorMessage;
+      
+      // If we have retries left and it's a timeout, continue
+      if (errorMessage.includes("timeout") && attempt < MAX_RETRIES) {
+        console.log(`Retrying in 3 seconds... (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        continue;
+      }
+      
+      // Otherwise return the error
+      return {
+        success: false,
+        error: errorMessage,
+      };
     }
-
-    console.log("Preparing payment transaction...");
-    const prepared = await client.autofill(payment);
-    
-    // Increase timeout for longer wait
-    if (prepared.LastLedgerSequence) {
-      prepared.LastLedgerSequence = prepared.LastLedgerSequence + 20;
-    }
-    
-    const signed = wallet.sign(prepared);
-    console.log("Submitting payment transaction...");
-    
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("Transaction timed out after 60 seconds. Please try again.")), 60000);
-    });
-    
-    const result = await Promise.race([
-      client.submitAndWait(signed.tx_blob),
-      timeoutPromise
-    ]);
-
-    const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
-
-    if (txResult.meta?.TransactionResult === "tesSUCCESS") {
-      console.log("✅ RWA token transfer successful!");
-      return { success: true, hash: txResult.hash };
-    }
-
-    // Provide user-friendly error messages
-    const errorCode = txResult.meta?.TransactionResult || "Failed to send RWA token";
-    let errorMessage = errorCode;
-    
-    if (errorCode === "tecNO_LINE") {
-      errorMessage = `Recipient ${recipient.substring(0, 8)}... does not have a trustline for this token. They need to create a trustline to ${issuer.substring(0, 8)}... first.`;
-    } else if (errorCode === "tecPATH_PARTIAL") {
-      errorMessage = "Cannot find a path to send this token. The recipient may need a trustline.";
-    } else if (errorCode === "tecUNFUNDED") {
-      errorMessage = "Insufficient XRP balance to pay transaction fees.";
-    } else if (errorCode === "tecNO_DST") {
-      errorMessage = "Destination account not found or not activated.";
-    } else if (errorCode === "tecDST_TAG_NEEDED") {
-      errorMessage = "Destination account requires a destination tag.";
-    }
-
-    return {
-      success: false,
-      error: errorMessage,
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to send RWA token";
-    console.error("Error sending RWA token:", errorMessage);
-    return {
-      success: false,
-      error: errorMessage,
-    };
   }
+
+  // If we get here, all retries failed
+  return {
+    success: false,
+    error: lastError || "Failed to send RWA token after multiple attempts",
+  };
 }
 
 /**
@@ -758,55 +1032,68 @@ const RWA_STORAGE_KEY = "sigmapay_rwa_tokens";
 function storeRWAToken(issuer: string, token: RWAToken): void {
   if (typeof window === "undefined") return;
   
-  const stored = localStorage.getItem(RWA_STORAGE_KEY);
-  const tokens: Record<string, RWAToken[]> = stored ? JSON.parse(stored) : {};
-  
-  if (!tokens[issuer]) {
-    tokens[issuer] = [];
+  try {
+    const stored = localStorage.getItem(RWA_STORAGE_KEY);
+    const tokens: Record<string, RWAToken[]> = stored ? JSON.parse(stored) : {};
+    
+    if (!tokens[issuer]) {
+      tokens[issuer] = [];
+    }
+    
+    // Update or add
+    const idx = tokens[issuer].findIndex(t => t.currency === token.currency);
+    if (idx >= 0) {
+      tokens[issuer][idx] = token;
+    } else {
+      tokens[issuer].push(token);
+    }
+    
+    localStorage.setItem(RWA_STORAGE_KEY, JSON.stringify(tokens));
+  } catch (error) {
+    console.error("Failed to store RWA token:", error);
   }
-  
-  // Update or add
-  const idx = tokens[issuer].findIndex(t => t.currency === token.currency);
-  if (idx >= 0) {
-    tokens[issuer][idx] = token;
-  } else {
-    tokens[issuer].push(token);
-  }
-  
-  localStorage.setItem(RWA_STORAGE_KEY, JSON.stringify(tokens));
 }
 
 function getStoredRWAToken(issuer: string, currency: string): RWAToken | null {
   if (typeof window === "undefined") return null;
   
-  const stored = localStorage.getItem(RWA_STORAGE_KEY);
-  if (!stored) return null;
-  
-  const tokens: Record<string, RWAToken[]> = JSON.parse(stored);
-  return tokens[issuer]?.find(t => t.currency === currency) || null;
+  try {
+    const stored = localStorage.getItem(RWA_STORAGE_KEY);
+    if (!stored) return null;
+    
+    const tokens: Record<string, RWAToken[]> = JSON.parse(stored);
+    return tokens[issuer]?.find(t => t.currency === currency) || null;
+  } catch (error) {
+    console.error("Failed to get stored RWA token:", error);
+    return null;
+  }
 }
 
 function clearDuplicateRWATokens(issuer: string): void {
   if (typeof window === "undefined") return;
   
-  const stored = localStorage.getItem(RWA_STORAGE_KEY);
-  if (!stored) return;
-  
-  const tokens: Record<string, RWAToken[]> = JSON.parse(stored);
-  if (!tokens[issuer]) return;
-  
-  // Remove duplicates based on currency
-  const seen = new Set<string>();
-  tokens[issuer] = tokens[issuer].filter(token => {
-    if (seen.has(token.currency)) {
-      console.log("Removing duplicate token:", token.currency);
-      return false;
-    }
-    seen.add(token.currency);
-    return true;
-  });
-  
-  localStorage.setItem(RWA_STORAGE_KEY, JSON.stringify(tokens));
+  try {
+    const stored = localStorage.getItem(RWA_STORAGE_KEY);
+    if (!stored) return;
+    
+    const tokens: Record<string, RWAToken[]> = JSON.parse(stored);
+    if (!tokens[issuer]) return;
+    
+    // Remove duplicates based on currency
+    const seen = new Set<string>();
+    tokens[issuer] = tokens[issuer].filter(token => {
+      if (seen.has(token.currency)) {
+        console.log("Removing duplicate token:", token.currency);
+        return false;
+      }
+      seen.add(token.currency);
+      return true;
+    });
+    
+    localStorage.setItem(RWA_STORAGE_KEY, JSON.stringify(tokens));
+  } catch (error) {
+    console.error("Failed to clear duplicate RWA tokens:", error);
+  }
 }
 
 function getIssuedRWATokens(issuer: string): RWAToken[] {
@@ -847,17 +1134,24 @@ if (typeof window !== "undefined") {
 export function getAllMarketplaceTokens(): RWAToken[] {
   if (typeof window === "undefined") return [];
   
-  const stored = localStorage.getItem(RWA_STORAGE_KEY);
-  if (!stored) return [];
-  
-  const tokens: Record<string, RWAToken[]> = JSON.parse(stored);
-  const all: RWAToken[] = [];
-  
-  for (const issuerTokens of Object.values(tokens)) {
-    all.push(...issuerTokens);
+  try {
+    const stored = localStorage.getItem(RWA_STORAGE_KEY);
+    if (!stored) return [];
+    
+    const tokens: Record<string, RWAToken[]> = JSON.parse(stored);
+    const all: RWAToken[] = [];
+    
+    for (const issuerTokens of Object.values(tokens)) {
+      if (Array.isArray(issuerTokens)) {
+        all.push(...issuerTokens);
+      }
+    }
+    
+    return all;
+  } catch (error) {
+    console.error("Failed to get marketplace tokens:", error);
+    return [];
   }
-  
-  return all;
 }
 
 // Demo RWA tokens for showcase

@@ -4,11 +4,12 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { RWAToken, RWACategory, createRWATrustline } from "@/lib/xrpl/rwa";
 import { useWallet } from "@/components/wallet/WalletProvider";
 import { toast } from "@/components/ui/use-toast";
 import { getExplorerAccountLink } from "@/lib/xrpl/constants";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { 
   Building2, 
   Gem, 
@@ -50,21 +51,35 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
   const [creatingTrustline, setCreatingTrustline] = useState(false);
   const [hasTrustline, setHasTrustline] = useState(false);
 
-  const category = token.metadata?.category || RWACategory.OTHER;
-  const config = categoryConfig[category];
-  const CategoryIcon = config.icon;
+  // Safety check for token - return early if no token
+  if (!token || !open) {
+    return null;
+  }
+
+  // Safely get category configuration with fallback
+  const category = token?.metadata?.category || RWACategory.OTHER;
+  const config = categoryConfig[category] || categoryConfig[RWACategory.OTHER];
+  const CategoryIcon = config?.icon || Package;
 
   const formatValue = (value?: string) => {
     if (!value) return null;
     const num = parseFloat(value);
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(num);
+    if (isNaN(num)) return null;
+    try {
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(num);
+    } catch (error) {
+      console.error("Error formatting currency:", error);
+      return `$${num.toLocaleString()}`;
+    }
   };
 
   const handleCreateTrustline = async () => {
-    if (!wallet || token.issuer === "demo") {
+    if (!wallet || !token || token.issuer === "demo") {
       toast({
         title: "Cannot Create Trustline",
-        description: "Demo tokens don't require trustlines. Contact the issuer to receive real tokens.",
+        description: token?.issuer === "demo" 
+          ? "Demo tokens don't require trustlines. Contact the issuer to receive real tokens."
+          : "Wallet not available or invalid token.",
         variant: "destructive",
       });
       return;
@@ -74,8 +89,8 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
     try {
       const result = await createRWATrustline(
         wallet,
-        token.currency,
-        token.issuer,
+        token.currency || "",
+        token.issuer || "",
         token.metadata?.totalSupply || "1000000000"
       );
 
@@ -105,25 +120,38 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
     }
   };
 
-  const isOwnToken = address === token.issuer;
-  const totalValue = token.metadata?.totalSupply && token.metadata?.unitValue
+  const isOwnToken = address === token?.issuer;
+  const totalValue = token?.metadata?.totalSupply && token?.metadata?.unitValue
     ? parseFloat(token.metadata.totalSupply) * parseFloat(token.metadata.unitValue)
     : null;
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "N/A";
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return dateString;
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${config.color}`}>
+            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${config?.color || "bg-gray-100 text-gray-700"}`}>
               <CategoryIcon className="w-6 h-6" />
             </div>
             <div className="flex-1">
-              <DialogTitle className="text-2xl">{token.metadata?.name || token.currencyDisplay}</DialogTitle>
-              <DialogDescription className="flex items-center gap-2 mt-1">
-                <Badge variant="outline" className="font-mono">{token.currencyDisplay}</Badge>
-                <Badge className={config.color}>{config.label}</Badge>
+              <DialogTitle className="text-2xl">{token?.metadata?.name || token?.currencyDisplay || "Unknown Token"}</DialogTitle>
+              <DialogDescription className="text-slate-600 mb-2">
+                Token details and information
               </DialogDescription>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="font-mono">{token?.currencyDisplay || "N/A"}</Badge>
+                <Badge className={config?.color || "bg-gray-100 text-gray-700"}>{config?.label || "Other"}</Badge>
+              </div>
             </div>
           </div>
         </DialogHeader>
@@ -194,7 +222,7 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
                   <Calendar className="w-5 h-5 text-orange-500" />
                   <div>
                     <p className="text-sm font-medium text-slate-700">Expiration Date</p>
-                    <p className="text-slate-600">{new Date(token.metadata.expirationDate).toLocaleDateString()}</p>
+                    <p className="text-slate-600">{formatDate(token.metadata.expirationDate)}</p>
                   </div>
                 </div>
               )}
@@ -212,7 +240,7 @@ export function TokenDetailsModal({ token, open, onClose, onTrustlineCreated }: 
                   <Calendar className="w-5 h-5 text-blue-500" />
                   <div>
                     <p className="text-sm font-medium text-slate-700">Created</p>
-                    <p className="text-slate-600">{new Date(token.metadata.createdAt).toLocaleDateString()}</p>
+                    <p className="text-slate-600">{formatDate(token.metadata.createdAt)}</p>
                   </div>
                 </div>
               )}
