@@ -1,67 +1,122 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useWallet } from "@/components/wallet/WalletProvider";
+import { getTransactionHistory, Transaction } from "@/lib/xrpl/transactions";
 import { formatRelativeTime, formatAddress, formatAmount } from "@/lib/utils/format";
-import { ArrowUpRight, ArrowDownLeft, Clock, ExternalLink } from "lucide-react";
+import { getExplorerTxLink } from "@/lib/xrpl/constants";
+import { 
+  ArrowUpRight, 
+  ArrowDownLeft, 
+  Clock, 
+  ExternalLink,
+  RefreshCw,
+  Lock,
+  Unlock,
+  Ban
+} from "lucide-react";
 import Link from "next/link";
 
-interface Transaction {
-  id: string;
-  type: "sent" | "received";
-  amount: string;
-  currency: string;
-  address: string;
-  timestamp: Date;
-  hash?: string;
-}
+export function RecentActivity() {
+  const { address, wallet } = useWallet();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-interface RecentActivityProps {
-  transactions?: Transaction[];
-}
+  const loadTransactions = useCallback(async () => {
+    if (!address) return;
 
-// Mock data for demonstration
-const mockTransactions: Transaction[] = [
-  {
-    id: "1",
-    type: "sent",
-    amount: "500",
-    currency: "RLUSD",
-    address: "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh",
-    timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 mins ago
-    hash: "ABC123...",
-  },
-  {
-    id: "2",
-    type: "received",
-    amount: "1,250",
-    currency: "RLUSD",
-    address: "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-    hash: "DEF456...",
-  },
-  {
-    id: "3",
-    type: "sent",
-    amount: "75",
-    currency: "RLUSD",
-    address: "rN7n3473SaZBCG4dFL83w7a1RXtXtbk2D9",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5), // 5 hours ago
-    hash: "GHI789...",
-  },
-  {
-    id: "4",
-    type: "received",
-    amount: "200",
-    currency: "RLUSD",
-    address: "rLNaPoKeeBjZe2qs6x52yVPZpZ8td4dczv",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-    hash: "JKL012...",
-  },
-];
+    setIsLoading(true);
+    try {
+      const txs = await getTransactionHistory(address);
+      setTransactions(txs);
+    } catch (err) {
+      console.error("Failed to load transactions:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [address]);
 
-export function RecentActivity({ transactions = mockTransactions }: RecentActivityProps) {
-  if (transactions.length === 0) {
+  useEffect(() => {
+    if (wallet) {
+      loadTransactions();
+    }
+  }, [wallet, loadTransactions]);
+
+  // Get icon and colors based on transaction type
+  const getIconAndColor = (type: Transaction["type"]) => {
+    switch (type) {
+      case "sent":
+        return {
+          icon: <ArrowUpRight className="w-4 h-4" />,
+          bgClass: "bg-destructive/10 text-destructive",
+          amountClass: "text-destructive",
+          prefix: "-"
+        };
+      case "received":
+        return {
+          icon: <ArrowDownLeft className="w-4 h-4" />,
+          bgClass: "bg-success/10 text-success",
+          amountClass: "text-success",
+          prefix: "+"
+        };
+      case "escrow_created":
+        return {
+          icon: <Lock className="w-4 h-4" />,
+          bgClass: "bg-info/10 text-info",
+          amountClass: "text-info",
+          prefix: "-"
+        };
+      case "escrow_finished":
+        return {
+          icon: <Unlock className="w-4 h-4" />,
+          bgClass: "bg-success/10 text-success",
+          amountClass: "text-success",
+          prefix: "+"
+        };
+      case "escrow_cancelled":
+        return {
+          icon: <Ban className="w-4 h-4" />,
+          bgClass: "bg-muted text-muted-foreground",
+          amountClass: "text-muted-foreground",
+          prefix: "↩"
+        };
+      default:
+        return {
+          icon: <Clock className="w-4 h-4" />,
+          bgClass: "bg-muted text-muted-foreground",
+          amountClass: "text-muted-foreground",
+          prefix: ""
+        };
+    }
+  };
+
+  const getLabel = (type: Transaction["type"]) => {
+    switch (type) {
+      case "sent": return "Sent";
+      case "received": return "Received";
+      case "escrow_created": return "Escrow Created";
+      case "escrow_finished": return "Escrow Claimed";
+      case "escrow_cancelled": return "Escrow Cancelled";
+      default: return type;
+    }
+  };
+
+  const getCounterpartyLabel = (type: Transaction["type"]) => {
+    switch (type) {
+      case "sent": return "To";
+      case "received": return "From";
+      case "escrow_created": return "To";
+      case "escrow_finished": return "From";
+      case "escrow_cancelled": return "";
+      default: return "";
+    }
+  };
+
+  // Loading state
+  if (isLoading) {
     return (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -71,6 +126,38 @@ export function RecentActivity({ transactions = mockTransactions }: RecentActivi
               See more
             </Button>
           </Link>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-3 p-3">
+              <Skeleton className="w-9 h-9 rounded-full" />
+              <div className="flex-1">
+                <Skeleton className="h-4 w-24 mb-2" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+              <Skeleton className="h-4 w-16" />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Empty state
+  if (transactions.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="text-xs"
+            onClick={loadTransactions}
+          >
+            <RefreshCw className="w-3 h-3 mr-1" />
+            Refresh
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -87,6 +174,9 @@ export function RecentActivity({ transactions = mockTransactions }: RecentActivi
     );
   }
 
+  // Show recent transactions (limit to 5)
+  const recentTransactions = transactions.slice(0, 5);
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -98,48 +188,51 @@ export function RecentActivity({ transactions = mockTransactions }: RecentActivi
         </Link>
       </CardHeader>
       <CardContent className="space-y-1">
-        {transactions.slice(0, 5).map((tx) => (
-          <div
-            key={tx.id}
-            className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center ${
-                  tx.type === "sent"
-                    ? "bg-destructive/10 text-destructive"
-                    : "bg-success/10 text-success"
-                }`}
-              >
-                {tx.type === "sent" ? (
-                  <ArrowUpRight className="w-4 h-4" />
-                ) : (
-                  <ArrowDownLeft className="w-4 h-4" />
-                )}
+        {recentTransactions.map((tx) => {
+          const { icon, bgClass, amountClass, prefix } = getIconAndColor(tx.type);
+          const label = getLabel(tx.type);
+          const counterpartyLabel = getCounterpartyLabel(tx.type);
+
+          return (
+            <div
+              key={tx.hash}
+              className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center ${bgClass}`}>
+                  {icon}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {label} {tx.currency}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {counterpartyLabel && `${counterpartyLabel} `}
+                    {tx.counterparty !== "Self" ? formatAddress(tx.counterparty, 4) : "Self"}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {tx.type === "sent" ? "Sent" : "Received"} {tx.currency}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {tx.type === "sent" ? "To" : "From"} {formatAddress(tx.address, 4)}
-                </p>
+              <div className="flex items-center gap-2">
+                <div className="text-right">
+                  <p className={`text-sm font-semibold ${amountClass}`}>
+                    {prefix}{tx.currency === "RLUSD" ? "$" : ""}{formatAmount(tx.amount)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatRelativeTime(new Date(tx.timestamp))}
+                  </p>
+                </div>
+                <a
+                  href={getExplorerTxLink(tx.hash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
               </div>
             </div>
-            <div className="text-right">
-              <p
-                className={`text-sm font-semibold ${
-                  tx.type === "sent" ? "text-destructive" : "text-success"
-                }`}
-              >
-                {tx.type === "sent" ? "-" : "+"}${tx.amount}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {formatRelativeTime(tx.timestamp)}
-              </p>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
     </Card>
   );

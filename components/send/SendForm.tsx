@@ -26,7 +26,8 @@ import {
     Gift,
     AlertTriangle,
     RefreshCw,
-    Coins
+    Coins,
+    Link as LinkIcon
 } from "lucide-react";
 import Link from "next/link";
 
@@ -39,7 +40,7 @@ interface TransactionResult {
 }
 
 export function SendForm() {
-    const { wallet, balances, refreshBalances, verificationLevel, sendLimit, isVerified, hasTrustline } = useWallet();
+    const { wallet, balances, refreshBalances, verificationLevel, sendLimit, isVerified, hasTrustline, setupTrustline, isFunded } = useWallet();
 
     const [step, setStep] = useState<Step>("amount");
     const [currency, setCurrency] = useState<Currency>("XRP"); // Default to XRP for easier testing
@@ -50,6 +51,7 @@ export function SendForm() {
     const [result, setResult] = useState<TransactionResult | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(true);
     const [showVerifyPrompt, setShowVerifyPrompt] = useState(false);
+    const [isSettingTrustline, setIsSettingTrustline] = useState(false);
 
     // Refresh wallet state when component mounts
     useEffect(() => {
@@ -224,6 +226,26 @@ export function SendForm() {
         }
     };
 
+    const handleSetupTrustline = async () => {
+        setIsSettingTrustline(true);
+        const success = await setupTrustline();
+        setIsSettingTrustline(false);
+
+        if (success) {
+            toast({
+                title: "RLUSD Enabled!",
+                description: "You can now send and receive RLUSD",
+                variant: "success",
+            });
+        } else {
+            toast({
+                title: "Failed to enable RLUSD",
+                description: "Please try again",
+                variant: "destructive",
+            });
+        }
+    };
+
     // Show loading while checking status
     if (isRefreshing) {
         return (
@@ -244,8 +266,8 @@ export function SendForm() {
                     <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
                         <AlertTriangle className="w-8 h-8 text-amber-600" />
                     </div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">RLUSD Not Enabled</h3>
-                    <p className="text-slate-500 mb-4">
+                    <h3 className="text-lg font-semibold text-foreground mb-2">RLUSD Not Enabled</h3>
+                    <p className="text-muted-foreground mb-4">
                         You need to enable RLUSD in your wallet before you can send RLUSD payments.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
@@ -257,13 +279,28 @@ export function SendForm() {
                             <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
                             Refresh
                         </Button>
-                        <Link href="/onboarding">
-                            <Button>
-                                Enable RLUSD
-                                <ArrowRight className="w-4 h-4 ml-2" />
-                            </Button>
-                        </Link>
+                        <Button
+                            onClick={handleSetupTrustline}
+                            disabled={isSettingTrustline || !isFunded}
+                        >
+                            {isSettingTrustline ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Enabling...
+                                </>
+                            ) : (
+                                <>
+                                    <LinkIcon className="w-4 h-4 mr-2" />
+                                    Enable RLUSD
+                                </>
+                            )}
+                        </Button>
                     </div>
+                    {!isFunded && (
+                        <p className="text-xs text-muted-foreground mt-3">
+                            Fund your wallet first to enable RLUSD
+                        </p>
+                    )}
                 </CardContent>
             </Card>
         );
