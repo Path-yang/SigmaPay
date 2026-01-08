@@ -161,12 +161,6 @@ export function RWACard({ token, onSend, onView, showBalance = true, compact = f
               View Details
             </Button>
           )}
-          {!onSend && !onView && showBalance && parseFloat(token.balance) > 0 && (
-            <Button onClick={() => onSend?.(token)} className="flex-1" size="sm">
-              <Send className="w-4 h-4 mr-2" />
-              Send
-            </Button>
-          )}
         </div>
       </CardContent>
     </Card>
