@@ -11,7 +11,7 @@ import { toast } from "@/components/ui/use-toast";
 import { Wallet, Key, Loader2, Copy, Eye, EyeOff, Check } from "lucide-react";
 
 export function WalletSetup() {
-    const { createWallet, importWalletFromSeed, isLoading } = useWallet();
+    const { createWallet, importWalletFromSeed, unlockWallet, isLoading } = useWallet();
 
     const [createPassword, setCreatePassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -20,6 +20,7 @@ export function WalletSetup() {
     const [showSeed, setShowSeed] = useState(false);
     const [generatedSeed, setGeneratedSeed] = useState<string | null>(null);
     const [seedCopied, setSeedCopied] = useState(false);
+    const [savedPassword, setSavedPassword] = useState(""); // Store password to unlock after seed confirmation
 
     const handleCreateWallet = async () => {
         if (createPassword.length < 6) {
@@ -43,6 +44,7 @@ export function WalletSetup() {
         try {
             const { seed } = await createWallet(createPassword);
             setGeneratedSeed(seed);
+            setSavedPassword(createPassword); // Save password for unlocking after seed confirmation
             toast({
                 title: "Wallet created!",
                 description: "Make sure to save your seed phrase securely",
@@ -174,9 +176,30 @@ export function WalletSetup() {
                     <Button
                         className="w-full"
                         size="lg"
-                        onClick={() => setGeneratedSeed(null)}
+                        onClick={async () => {
+                            try {
+                                // Unlock the wallet with the saved password
+                                await unlockWallet(savedPassword);
+                                setGeneratedSeed(null);
+                                setSavedPassword("");
+                            } catch (err) {
+                                toast({
+                                    title: "Failed to unlock wallet",
+                                    description: err instanceof Error ? err.message : "Unknown error",
+                                    variant: "destructive",
+                                });
+                            }
+                        }}
+                        disabled={isLoading}
                     >
-                        I&apos;ve Saved My Seed
+                        {isLoading ? (
+                            <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Unlocking...
+                            </>
+                        ) : (
+                            "I've Saved My Seed"
+                        )}
                     </Button>
                 </CardContent>
             </Card>

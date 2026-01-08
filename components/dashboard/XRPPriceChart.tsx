@@ -43,35 +43,31 @@ export function XRPPriceChart() {
       };
       const days = daysMap[timeRange];
       
-      // Fetch current price data with selected currency
-      const priceResponse = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=${currency}&include_24hr_change=true`
-      );
+      // Use our server-side API route to avoid CORS issues
+      const response = await fetch(`/api/price?currency=${currency}&days=${days}`);
       
-      // Fetch historical data for chart with selected currency
-      const chartResponse = await fetch(
-        `https://api.coingecko.com/api/v3/coins/ripple/market_chart?vs_currency=${currency}&days=${days}`
-      );
-      
-      if (!priceResponse.ok || !chartResponse.ok) {
+      if (!response.ok) {
         throw new Error("Failed to fetch price");
       }
       
-      const priceDataResult = await priceResponse.json();
-      const chartData = await chartResponse.json();
+      const data = await response.json();
       
-      const prices = chartData.prices.map((p: [number, number]) => p[1]);
-      const currentPrice = priceDataResult.ripple[currency];
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      const prices = data.chart?.map((p: [number, number]) => p[1]) || [];
+      const currentPrice = data.price?.[currency] || 0;
       const firstPrice = prices[0] || currentPrice;
       const change = currentPrice - firstPrice;
-      const changePercent = (change / firstPrice) * 100;
+      const changePercent = firstPrice ? (change / firstPrice) * 100 : 0;
       
       setPriceData({
         current: currentPrice,
         change: change,
         changePercent: changePercent,
-        high: Math.max(...prices),
-        low: Math.min(...prices),
+        high: prices.length ? Math.max(...prices) : currentPrice,
+        low: prices.length ? Math.min(...prices) : currentPrice,
         sparkline: prices,
       });
     } catch (err) {

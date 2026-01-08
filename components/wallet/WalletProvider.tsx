@@ -202,10 +202,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
             saveWallet(newAddress, seed, publicKey, password);
 
-            const newWallet = getWalletFromSeed(seed);
+            // DON'T auto-unlock - let user see the seed first
+            // The WalletSetup component will show the seed, then user can unlock
             setAddress(newAddress);
-            setWallet(newWallet);
             setHasWallet(true);
+            // wallet stays null until user explicitly unlocks
             setError(null);
 
             return { seed, address: newAddress };
