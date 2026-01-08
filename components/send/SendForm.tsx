@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +46,22 @@ export function SendForm() {
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState<TransactionResult | null>(null);
     const [showVerifyPrompt, setShowVerifyPrompt] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(true);
+
+    // Refresh wallet state when component mounts to ensure trustline status is current
+    useEffect(() => {
+        const refresh = async () => {
+            setIsRefreshing(true);
+            try {
+                await refreshBalances();
+            } catch (e) {
+                console.error("Failed to refresh:", e);
+            } finally {
+                setIsRefreshing(false);
+            }
+        };
+        refresh();
+    }, [refreshBalances]);
 
     const amountNum = parseFloat(amount) || 0;
     const balanceNum = parseFloat(balances.rlusd) || 0;
@@ -156,6 +172,18 @@ export function SendForm() {
         setMessage("");
         setResult(null);
     };
+
+    // Show loading while checking trustline status
+    if (isRefreshing) {
+        return (
+            <Card>
+                <CardContent className="p-8 text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-4" />
+                    <p className="text-slate-500">Checking wallet status...</p>
+                </CardContent>
+            </Card>
+        );
+    }
 
     if (!hasTrustline) {
         return (
