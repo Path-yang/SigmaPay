@@ -199,14 +199,23 @@ export async function issueRWAToken(
 
       console.log("Preparing transaction...");
       const prepared = await client.autofill(registration);
-      // Increase LastLedgerSequence for longer timeout (~5 minutes instead of ~1 minute)
+      // Increase LastLedgerSequence for longer timeout
       if (prepared.LastLedgerSequence) {
-        prepared.LastLedgerSequence = prepared.LastLedgerSequence + 55; // Add ~55 more ledgers
+        prepared.LastLedgerSequence = prepared.LastLedgerSequence + 20; // Add ~20 more ledgers (~80 seconds)
       }
       console.log("Transaction prepared, signing...");
       const signed = wallet.sign(prepared);
-      console.log("Transaction signed, submitting to ledger...");
-      const result = await client.submitAndWait(signed.tx_blob);
+      console.log("Transaction signed, submitting to ledger (max 60s wait)...");
+      
+      // Add a 60-second timeout to prevent infinite waiting
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Transaction timed out after 60 seconds. The testnet may be slow. Please try again.")), 60000);
+      });
+      
+      const result = await Promise.race([
+        client.submitAndWait(signed.tx_blob),
+        timeoutPromise
+      ]);
 
       const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
       console.log("Transaction result:", txResult);
