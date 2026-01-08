@@ -33,11 +33,13 @@ export default function OnboardingPage() {
     const router = useRouter();
     const { 
         createWallet, 
-        importWalletFromSeed, 
+        importWalletFromSeed,
+        unlockWallet,
         fundWallet, 
         setupTrustline,
         initializeDID,
         wallet,
+        address,
         isFunded,
         hasTrustline,
         hasDID,
@@ -58,6 +60,7 @@ export default function OnboardingPage() {
     const [crossmarkInstalled, setCrossmarkInstalled] = useState(false);
     const [crossmarkAddress, setCrossmarkAddress] = useState<string | null>(null);
     const [trustlineError, setTrustlineError] = useState<string | null>(null);
+    const [savedPassword, setSavedPassword] = useState(""); // Store password to unlock after seed display
 
     useEffect(() => {
         const checkCrossmark = () => setCrossmarkInstalled(isCrossmarkInstalled());
@@ -86,6 +89,7 @@ export default function OnboardingPage() {
         try {
             const { seed } = await createWallet(password);
             setSeedPhrase(seed);
+            setSavedPassword(password); // Save password to unlock later
             setStep("seed");
         } catch (error) {
             toast({ title: "Failed to create wallet", description: String(error), variant: "destructive" });
@@ -160,19 +164,44 @@ export default function OnboardingPage() {
     const handleFundWallet = async () => {
         setLoading(true);
         setFundingError(null);
+        
         try {
+            // First check if already funded by refreshing balances
+            await refreshBalances();
+            const currentBalance = parseFloat(balances.xrp) || 0;
+            
+            if (currentBalance > 10) {
+                // Already has enough XRP
+                toast({ title: "Wallet already funded!", description: `You have ${currentBalance.toFixed(2)} XRP` });
+                setTimeout(() => setStep("trustline"), 500);
+                return;
+            }
+            
             const success = await fundWallet();
-            if (success) {
-                await refreshBalances();
-                toast({ title: "Wallet funded!", description: "You received test XRP" });
+            
+            // Always refresh balances after attempting to fund
+            await refreshBalances();
+            const newBalance = parseFloat(balances.xrp) || 0;
+            
+            if (success || newBalance > currentBalance) {
+                toast({ title: "Wallet funded!", description: `You now have ${newBalance.toFixed(2)} XRP` });
                 setTimeout(() => setStep("trustline"), 1000);
             } else {
                 setFundingError("Faucet might be busy. Please try again.");
                 toast({ title: "Funding failed", description: "Try again in a moment", variant: "destructive" });
             }
         } catch (error) {
-            setFundingError(String(error));
-            toast({ title: "Funding failed", description: String(error), variant: "destructive" });
+            // Even if there's an error, check if balance increased
+            await refreshBalances();
+            const checkBalance = parseFloat(balances.xrp) || 0;
+            
+            if (checkBalance > 10) {
+                toast({ title: "Wallet funded!", description: `You have ${checkBalance.toFixed(2)} XRP` });
+                setTimeout(() => setStep("trustline"), 1000);
+            } else {
+                setFundingError(String(error));
+                toast({ title: "Funding failed", description: String(error), variant: "destructive" });
+            }
         } finally {
             setLoading(false);
         }
@@ -495,7 +524,23 @@ export default function OnboardingPage() {
                             <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-foreground">
                                 <strong>Never share</strong> your seed phrase. Anyone with it can access your funds.
                             </div>
-                            <Button className="w-full" onClick={() => setStep("fund")}>
+                            <Button 
+                                className="w-full" 
+                                onClick={async () => {
+                                    setLoading(true);
+                                    try {
+                                        // Unlock the wallet before proceeding to fund
+                                        await unlockWallet(savedPassword);
+                                        setStep("fund");
+                                    } catch (error) {
+                                        toast({ title: "Failed to unlock wallet", description: String(error), variant: "destructive" });
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                }}
+                                disabled={loading}
+                            >
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                 I&apos;ve Saved It
                                 <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
@@ -513,7 +558,7 @@ export default function OnboardingPage() {
                         <CardContent className="space-y-4">
                             <div className="p-4 bg-info/5 border border-info/20 rounded-xl text-center">
                                 <Zap className="w-10 h-10 text-info mx-auto mb-2" />
-                                <p className="text-sm text-foreground">You&apos;ll receive ~10 test XRP to cover transaction fees</p>
+                                <p className="text-sm text-foreground">You&apos;ll receive test XRP from the faucet (typically 100-1000 XRP)</p>
                             </div>
 
                             {xrpBalance > 0 && (
