@@ -63,8 +63,8 @@ export function SendInstructions({ className }: SendInstructionsProps) {
                     <Circle className="w-4 h-4 text-amber-600" />
                   </div>
                 ) : step.status === "active" ? (
-                  <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center">
-                    <CheckCircle className="w-4 h-4 text-indigo-600" />
+                  <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+                    <CheckCircle className="w-4 h-4 text-primary" />
                   </div>
                 ) : (
                   <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">

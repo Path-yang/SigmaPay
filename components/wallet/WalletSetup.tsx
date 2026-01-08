@@ -186,7 +186,7 @@ export function WalletSetup() {
     return (
         <Card className="w-full max-w-md mx-auto">
             <CardHeader className="text-center">
-                <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4">
+                <div className="mx-auto w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mb-4">
                     <Wallet className="w-8 h-8 text-white" />
                 </div>
                 <CardTitle>Get Started</CardTitle>

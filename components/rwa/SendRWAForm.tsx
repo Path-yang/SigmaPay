@@ -217,7 +217,7 @@ export function SendRWAForm({ token, onSuccess, onCancel }: SendRWAFormProps) {
                   href={getExplorerTxLink(txHash)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-indigo-600 hover:underline"
+                  className="text-primary hover:underline"
                 >
                   View on XRPL Explorer →
                 </a>
@@ -237,7 +237,7 @@ export function SendRWAForm({ token, onSuccess, onCancel }: SendRWAFormProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Globe className="w-5 h-5 text-indigo-600" />
+          <Globe className="w-5 h-5 text-primary" />
           Send RWA Overseas
         </CardTitle>
         <CardDescription>
@@ -251,7 +251,7 @@ export function SendRWAForm({ token, onSuccess, onCancel }: SendRWAFormProps) {
             <p className="font-semibold text-sm">{token.metadata?.name || token.currencyDisplay}</p>
             <p className="text-xs text-slate-500">{token.currencyDisplay}</p>
             {isIssuer && (
-              <p className="text-xs text-indigo-600 mt-1">You are the issuer</p>
+              <p className="text-xs text-primary mt-1">You are the issuer</p>
             )}
           </div>
           <div className="text-right">
@@ -289,7 +289,7 @@ export function SendRWAForm({ token, onSuccess, onCancel }: SendRWAFormProps) {
             <button 
               type="button"
               onClick={() => setAmount(maxAmount.toString())}
-              className="text-xs text-indigo-600 hover:underline"
+              className="text-xs text-primary hover:underline"
             >
               Max
             </button>

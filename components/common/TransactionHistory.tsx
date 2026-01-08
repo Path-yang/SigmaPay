@@ -227,7 +227,7 @@ export function TransactionHistory() {
                                                 href={getExplorerTxLink(tx.hash)}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                                                className="p-2 text-slate-400 hover:text-primary transition-colors"
                                             >
                                                 <ExternalLink className="w-4 h-4" />
                                             </a>

@@ -204,7 +204,7 @@ export function EscrowForm() {
       return (
         <Card>
           <CardContent className="p-8 text-center">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-4" />
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
             <p className="text-slate-500">Generating secret code...</p>
           </CardContent>
         </Card>
@@ -294,7 +294,7 @@ export function EscrowForm() {
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                   step === s
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-primary text-white"
                     : ["type", "details", "confirm"].indexOf(step) > i
                       ? "bg-emerald-500 text-white"
                       : "bg-slate-100 text-slate-400"
@@ -328,16 +328,16 @@ export function EscrowForm() {
                 onClick={() => setReleaseType("time")}
                 className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
                   releaseType === "time"
-                    ? "border-indigo-500 bg-indigo-50"
+                    ? "border-primary bg-primary/10"
                     : "border-slate-200 hover:border-slate-300"
                 }`}
               >
                 <div className="flex items-start gap-3">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    releaseType === "time" ? "bg-indigo-100" : "bg-slate-100"
+                    releaseType === "time" ? "bg-primary/20" : "bg-slate-100"
                   }`}>
                     <Clock className={`w-5 h-5 ${
-                      releaseType === "time" ? "text-indigo-600" : "text-slate-500"
+                      releaseType === "time" ? "text-primary" : "text-slate-500"
                     }`} />
                   </div>
                   <div>
@@ -354,16 +354,16 @@ export function EscrowForm() {
                 onClick={() => setReleaseType("condition")}
                 className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
                   releaseType === "condition"
-                    ? "border-indigo-500 bg-indigo-50"
+                    ? "border-primary bg-primary/10"
                     : "border-slate-200 hover:border-slate-300"
                 }`}
               >
                 <div className="flex items-start gap-3">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    releaseType === "condition" ? "bg-indigo-100" : "bg-slate-100"
+                    releaseType === "condition" ? "bg-primary/20" : "bg-slate-100"
                   }`}>
                     <Key className={`w-5 h-5 ${
-                      releaseType === "condition" ? "text-indigo-600" : "text-slate-500"
+                      releaseType === "condition" ? "text-primary" : "text-slate-500"
                     }`} />
                   </div>
                   <div>
@@ -380,16 +380,16 @@ export function EscrowForm() {
                 onClick={() => setReleaseType("both")}
                 className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
                   releaseType === "both"
-                    ? "border-indigo-500 bg-indigo-50"
+                    ? "border-primary bg-primary/10"
                     : "border-slate-200 hover:border-slate-300"
                 }`}
               >
                 <div className="flex items-start gap-3">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    releaseType === "both" ? "bg-indigo-100" : "bg-slate-100"
+                    releaseType === "both" ? "bg-primary/20" : "bg-slate-100"
                   }`}>
                     <Lock className={`w-5 h-5 ${
-                      releaseType === "both" ? "text-indigo-600" : "text-slate-500"
+                      releaseType === "both" ? "text-primary" : "text-slate-500"
                     }`} />
                   </div>
                   <div>
@@ -573,8 +573,8 @@ export function EscrowForm() {
               </div>
             </div>
 
-            <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
-              <p className="text-sm text-indigo-700">
+            <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
+              <p className="text-sm text-primary">
                 <strong>Network Fee:</strong> ~0.00001 XRP
               </p>
             </div>

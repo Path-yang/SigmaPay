@@ -1,189 +1,297 @@
 "use client";
 
+import { useState } from "react";
 import { useWallet } from "@/components/wallet/WalletProvider";
-import { WalletSetup } from "@/components/wallet/WalletSetup";
-import { WalletUnlock } from "@/components/wallet/WalletUnlock";
-import { WalletBalance } from "@/components/wallet/WalletBalance";
-import { DIDStatus } from "@/components/did/DIDStatus";
-import { VerificationBadge } from "@/components/did/VerificationBadge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { VerificationLevel, getLimitDisplay } from "@/lib/xrpl/constants";
-import Link from "next/link";
-import { Send, Inbox, Clock, ArrowRight, Shield, ShieldCheck, Lock } from "lucide-react";
+import { QuickActions } from "@/components/dashboard/QuickActions";
+import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { XRPPriceChart } from "@/components/dashboard/XRPPriceChart";
+import { DIDStatus } from "@/components/did/DIDStatus";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getLimitDisplay } from "@/lib/xrpl/constants";
+import { formatAmount } from "@/lib/utils/format";
+import { toast } from "@/components/ui/use-toast";
+import Link from "next/link";
+import { 
+  ArrowRight, 
+  Shield, 
+  ShieldCheck, 
+  Zap,
+  DollarSign,
+  RefreshCw,
+  Loader2
+} from "lucide-react";
 
 export default function DashboardPage() {
-    const { 
-        hasWallet, 
-        wallet, 
-        isLoading, 
-        verificationLevel,
-        sendLimit,
-        isVerified,
-        hasDID 
-    } = useWallet();
+  const { 
+    verificationLevel,
+    isVerified,
+    balances,
+    isLoading,
+    hasTrustline,
+    isFunded,
+    refreshBalances,
+    fundWallet,
+    setupTrustline,
+  } = useWallet();
 
-    // Show loading state
-    if (isLoading && !hasWallet) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4">
-                <div className="w-full max-w-md space-y-4">
-                    <Skeleton className="h-48 w-full rounded-2xl" />
-                    <Skeleton className="h-12 w-full rounded-xl" />
-                </div>
-            </div>
-        );
+  const [isFunding, setIsFunding] = useState(false);
+  const [isSettingTrustline, setIsSettingTrustline] = useState(false);
+
+  const handleFundWallet = async () => {
+    setIsFunding(true);
+    const success = await fundWallet();
+    setIsFunding(false);
+
+    if (success) {
+      toast({
+        title: "Wallet funded!",
+        description: "Your wallet has been funded with test XRP",
+        variant: "success",
+      });
+    } else {
+      toast({
+        title: "Funding failed",
+        description: "Please try again in a few moments",
+        variant: "destructive",
+      });
     }
+  };
 
-    // No wallet - show setup
-    if (!hasWallet) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4">
-                <WalletSetup />
-            </div>
-        );
+  const handleSetupTrustline = async () => {
+    setIsSettingTrustline(true);
+    const success = await setupTrustline();
+    setIsSettingTrustline(false);
+
+    if (success) {
+      toast({
+        title: "RLUSD Enabled!",
+        description: "You can now send and receive RLUSD stablecoin",
+        variant: "success",
+      });
+    } else {
+      toast({
+        title: "Setup failed",
+        description: "Please try again in a few moments",
+        variant: "destructive",
+      });
     }
+  };
 
-    // Has wallet but locked - show unlock
-    if (!wallet) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4">
-                <WalletUnlock />
-            </div>
-        );
-    }
+  const xrpBalance = parseFloat(balances.xrp) || 0;
+  const rlusdBalance = parseFloat(balances.rlusd) || 0;
 
-    // Wallet unlocked - show dashboard
-    return (
-        <div className="min-h-screen pb-24 md:pb-8">
-            <div className="max-w-lg mx-auto px-4 py-8">
-                {/* Header with verification status */}
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-                        <p className="text-slate-500">Manage your wallet</p>
-                    </div>
-                    <VerificationBadge level={verificationLevel} />
-                </div>
-
-                {/* Verification Prompt for Unverified Users */}
-                {!isVerified && (
-                    <Card className="mb-6 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50">
-                        <CardContent className="p-4">
-                            <div className="flex items-start gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                                    <Shield className="w-5 h-5 text-amber-600" />
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="font-semibold text-amber-800">Verify Your Identity</h3>
-                                    <p className="text-sm text-amber-700 mb-3">
-                                        Your current limit is {getLimitDisplay(verificationLevel)}. Verify to unlock instant transfers and higher limits.
-                                    </p>
-                                    <Link href="/verify">
-                                        <Button size="sm" className="bg-amber-600 hover:bg-amber-700">
-                                            <ShieldCheck className="w-4 h-4 mr-2" />
-                                            Verify Now
-                                        </Button>
-                                    </Link>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Fund Wallet Prompt for New Accounts */}
+      {!isFunded && (
+        <Card className="border-success/30 bg-success/5">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center flex-shrink-0">
+                <Zap className="w-5 h-5 text-success" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-foreground">Welcome! Fund Your Wallet</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Get started by funding your wallet with free test XRP from the testnet faucet.
+                </p>
+              </div>
+              <Button 
+                size="sm" 
+                onClick={handleFundWallet}
+                disabled={isFunding}
+                className="bg-success hover:bg-success/90 text-success-foreground"
+              >
+                {isFunding ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Funding...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 mr-2" />
+                    Fund Wallet
+                  </>
                 )}
-
-                {/* Wallet Balance */}
-                <div className="mb-6">
-                    <WalletBalance />
-                </div>
-
-                {/* Quick Actions */}
-                <div className="grid grid-cols-4 gap-3 mb-6">
-                    <Link href="/send">
-                        <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
-                            <CardContent className="p-3 text-center">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto mb-2">
-                                    <Send className="w-4 h-4 text-white" />
-                                </div>
-                                <p className="font-medium text-slate-900 text-sm">Send</p>
-                            </CardContent>
-                        </Card>
-                    </Link>
-
-                    <Link href="/receive">
-                        <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
-                            <CardContent className="p-3 text-center">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mx-auto mb-2">
-                                    <Inbox className="w-4 h-4 text-white" />
-                                </div>
-                                <p className="font-medium text-slate-900 text-sm">Receive</p>
-                            </CardContent>
-                        </Card>
-                    </Link>
-
-                    <Link href="/escrow">
-                        <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
-                            <CardContent className="p-3 text-center">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mx-auto mb-2">
-                                    <Lock className="w-4 h-4 text-white" />
-                                </div>
-                                <p className="font-medium text-slate-900 text-sm">Escrow</p>
-                            </CardContent>
-                        </Card>
-                    </Link>
-
-                    <Link href="/history">
-                        <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
-                            <CardContent className="p-3 text-center">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center mx-auto mb-2">
-                                    <Clock className="w-4 h-4 text-white" />
-                                </div>
-                                <p className="font-medium text-slate-900 text-sm">History</p>
-                            </CardContent>
-                        </Card>
-                    </Link>
-                </div>
-
-                {/* Live XRP Price Chart */}
-                <XRPPriceChart />
-
-                {/* DID Status Card */}
-                <div className="mb-6">
-                    <DIDStatus level={verificationLevel} showUpgradePrompt={!isVerified} />
-                </div>
-
-                {/* Info Card */}
-                <Card className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-indigo-200/50">
-                    <CardContent className="p-6">
-                        <h3 className="font-semibold text-slate-900 mb-2">How it works</h3>
-                        <ul className="space-y-2 text-sm text-slate-600">
-                            <li className="flex items-center gap-2">
-                                <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">1</span>
-                                Fund your wallet with test XRP
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">2</span>
-                                Enable RLUSD to receive stablecoin payments
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">3</span>
-                                Verify your identity for higher limits
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">4</span>
-                                Send RLUSD to anyone, anywhere instantly
-                            </li>
-                        </ul>
-                        <Link href="/send">
-                            <Button className="w-full mt-4" size="lg">
-                                Send Your First Gift
-                                <ArrowRight className="w-4 h-4 ml-2" />
-                            </Button>
-                        </Link>
-                    </CardContent>
-                </Card>
+              </Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Verification Prompt for Unverified Users */}
+      {isFunded && !isVerified && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center flex-shrink-0">
+                <Shield className="w-5 h-5 text-warning" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-foreground">Verify Your Identity</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Your current limit is {getLimitDisplay(verificationLevel)}. Verify to unlock instant transfers and higher limits.
+                </p>
+              </div>
+              <Link href="/verify">
+                <Button size="sm" className="bg-warning hover:bg-warning/90 text-warning-foreground">
+                  <ShieldCheck className="w-4 h-4 mr-2" />
+                  Verify Now
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Balance Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* XRP Balance */}
+        <Card className="animate-fade-in delay-75">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
+                  <Zap className="w-6 h-6 text-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">XRP Balance</p>
+                  <p className="text-xs text-muted-foreground">Native currency</p>
+                </div>
+              </div>
+              <button 
+                onClick={refreshBalances}
+                disabled={isLoading}
+                className="p-2 rounded-lg hover:bg-muted transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 text-muted-foreground ${isLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+            {isLoading ? (
+              <Skeleton className="h-10 w-32" />
+            ) : (
+              <p className="text-3xl font-bold text-foreground">
+                {formatAmount(xrpBalance.toString())} <span className="text-lg text-muted-foreground">XRP</span>
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* RLUSD Balance */}
+        <Card className="animate-fade-in delay-150">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
+                  <DollarSign className="w-6 h-6 text-success" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">RLUSD Balance</p>
+                  <p className="text-xs text-muted-foreground">USD Stablecoin</p>
+                </div>
+              </div>
+            </div>
+            {isLoading ? (
+              <Skeleton className="h-10 w-32" />
+            ) : hasTrustline ? (
+              <p className="text-3xl font-bold text-foreground">
+                ${formatAmount(rlusdBalance.toString())} <span className="text-lg text-muted-foreground">RLUSD</span>
+              </p>
+            ) : (
+              <div>
+                <p className="text-lg text-muted-foreground mb-2">Trustline not enabled</p>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={handleSetupTrustline}
+                  disabled={isSettingTrustline || !isFunded}
+                >
+                  {isSettingTrustline ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Enabling...
+                    </>
+                  ) : (
+                    "Enable RLUSD"
+                  )}
+                </Button>
+                {!isFunded && (
+                  <p className="text-xs text-muted-foreground mt-1">Fund wallet first</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="animate-fade-in delay-200">
+        <QuickActions />
+      </div>
+
+      {/* Charts and Activity Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Chart - Takes 2 columns */}
+        <div className="lg:col-span-2 animate-fade-in delay-300">
+          <XRPPriceChart />
         </div>
-    );
+
+        {/* Recent Activity */}
+        <div className="animate-fade-in delay-300">
+          <RecentActivity />
+        </div>
+      </div>
+
+      {/* Bottom Section: DID Status + Getting Started */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* DID Status */}
+        <div className="animate-fade-in">
+          <DIDStatus level={verificationLevel} showUpgradePrompt={!isVerified} />
+        </div>
+
+        {/* Getting Started Card */}
+        <Card className="animate-fade-in">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">Getting Started</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-3">
+              <li className="flex items-center gap-3">
+                <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                  1
+                </span>
+                <span className="text-sm text-muted-foreground">Fund your wallet with test XRP</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                  2
+                </span>
+                <span className="text-sm text-muted-foreground">Enable RLUSD to receive stablecoin payments</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                  3
+                </span>
+                <span className="text-sm text-muted-foreground">Verify your identity for higher limits</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                  4
+                </span>
+                <span className="text-sm text-muted-foreground">Send RLUSD to anyone, anywhere instantly</span>
+              </li>
+            </ul>
+            <Link href="/send">
+              <Button className="w-full mt-4">
+                Send Your First Transfer
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 }

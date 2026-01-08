@@ -89,7 +89,7 @@ export function AddTokenDialog({ open, onClose, onTokenAdded }: AddTokenDialogPr
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Search className="w-5 h-5 text-indigo-600" />
+            <Search className="w-5 h-5 text-primary" />
             Add Token to Marketplace
           </DialogTitle>
         </DialogHeader>

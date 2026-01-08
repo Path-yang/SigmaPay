@@ -51,7 +51,7 @@ export function RWACard({ token, onSend, onView, showBalance = true, compact = f
 
   if (compact) {
     return (
-      <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 hover:border-indigo-300 transition-all">
+      <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 hover:border-primary/50 transition-all">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${config.color}`}>
             <CategoryIcon className="w-5 h-5" />
@@ -74,7 +74,7 @@ export function RWACard({ token, onSend, onView, showBalance = true, compact = f
   }
 
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-all border-slate-200 hover:border-indigo-300">
+    <Card className="overflow-hidden hover:shadow-lg transition-all border-slate-200 hover:border-primary/50">
       {/* Header with category */}
       <div className={`px-4 py-2 ${config.color} flex items-center gap-2`}>
         <CategoryIcon className="w-4 h-4" />
@@ -93,7 +93,7 @@ export function RWACard({ token, onSend, onView, showBalance = true, compact = f
           </div>
           {showBalance && parseFloat(token.balance) > 0 && (
             <div className="text-right">
-              <p className="text-2xl font-bold text-indigo-600">
+              <p className="text-2xl font-bold text-primary">
                 {parseFloat(token.balance).toLocaleString()}
               </p>
               <p className="text-xs text-slate-500">units held</p>
@@ -136,7 +136,7 @@ export function RWACard({ token, onSend, onView, showBalance = true, compact = f
           )}
           {token.metadata?.issuerName && (
             <div className="flex items-center gap-2 text-slate-600 col-span-2">
-              <User className="w-4 h-4 text-indigo-500" />
+              <User className="w-4 h-4 text-primary" />
               <span className="truncate">{token.metadata.issuerName}</span>
             </div>
           )}
