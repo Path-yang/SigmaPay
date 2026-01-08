@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 // Cache the price data for 60 seconds to reduce API calls
-let cachedData: { data: any; timestamp: number } | null = null;
+// Use a Map to cache per currency+days combination
+const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_DURATION = 60 * 1000; // 60 seconds
 
 export async function GET(request: Request) {
@@ -11,9 +12,10 @@ export async function GET(request: Request) {
 
   const cacheKey = `${currency}-${days}`;
 
-  // Check cache
-  if (cachedData && Date.now() - cachedData.timestamp < CACHE_DURATION) {
-    return NextResponse.json(cachedData.data);
+  // Check cache for this specific currency+days combo
+  const cachedEntry = cache.get(cacheKey);
+  if (cachedEntry && Date.now() - cachedEntry.timestamp < CACHE_DURATION) {
+    return NextResponse.json(cachedEntry.data);
   }
 
   try {
@@ -41,8 +43,9 @@ export async function GET(request: Request) {
 
     if (!priceResponse.ok || !chartResponse.ok) {
       // Return cached data if available, even if stale
-      if (cachedData) {
-        return NextResponse.json(cachedData.data);
+      const staleCache = cache.get(cacheKey);
+      if (staleCache) {
+        return NextResponse.json(staleCache.data);
       }
       throw new Error("Failed to fetch price data");
     }
@@ -55,19 +58,20 @@ export async function GET(request: Request) {
       chart: chartData.prices,
     };
 
-    // Update cache
-    cachedData = {
+    // Update cache for this specific currency+days combo
+    cache.set(cacheKey, {
       data: result,
       timestamp: Date.now(),
-    };
+    });
 
     return NextResponse.json(result);
   } catch (error) {
     console.error("Price API error:", error);
 
     // Return cached data if available
-    if (cachedData) {
-      return NextResponse.json(cachedData.data);
+    const staleCache = cache.get(cacheKey);
+    if (staleCache) {
+      return NextResponse.json(staleCache.data);
     }
 
     return NextResponse.json(
