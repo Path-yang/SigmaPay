@@ -81,7 +81,20 @@ export default function VerifyPage() {
                     description: "You can now send up to $1,000 via direct payments",
                     variant: "success" 
                 });
+            } else {
+                toast({ 
+                    title: "Verification Failed", 
+                    description: "Make sure your wallet is funded with XRP. Check console for details.",
+                    variant: "destructive" 
+                });
             }
+        } catch (error) {
+            toast({ 
+                title: "Verification Error", 
+                description: error instanceof Error ? error.message : "An unexpected error occurred",
+                variant: "destructive" 
+            });
+            console.error("Verification error:", error);
         } finally {
             setLoading(false);
         }
@@ -102,7 +115,20 @@ export default function VerifyPage() {
                     description: "You now have unlimited transfer limits",
                     variant: "success" 
                 });
+            } else {
+                toast({ 
+                    title: "Verification Failed", 
+                    description: "Make sure your wallet is funded with XRP. Check console for details.",
+                    variant: "destructive" 
+                });
             }
+        } catch (error) {
+            toast({ 
+                title: "Verification Error", 
+                description: error instanceof Error ? error.message : "An unexpected error occurred",
+                variant: "destructive" 
+            });
+            console.error("Verification error:", error);
         } finally {
             setLoading(false);
         }

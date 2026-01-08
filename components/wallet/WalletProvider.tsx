@@ -306,22 +306,31 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         level: VerificationLevel,
         data?: { name?: string; email?: string; phone?: string }
     ): Promise<boolean> => {
-        if (!wallet) return false;
+        if (!wallet) {
+            console.error("Cannot verify: wallet not unlocked");
+            return false;
+        }
 
         try {
             setIsLoading(true);
+            console.log("Starting verification:", level, data);
             const result = await updateVerificationLevel(wallet, level, data);
+
+            console.log("Verification result:", result);
 
             if (result.success) {
                 await refreshDID();
                 return true;
             } else {
-                setError(result.error || "Failed to verify identity");
+                const errorMsg = result.error || "Failed to verify identity";
+                setError(errorMsg);
+                console.error("Verification failed:", errorMsg);
                 return false;
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : "Failed to verify identity";
             setError(message);
+            console.error("Verification error:", err);
             return false;
         } finally {
             setIsLoading(false);

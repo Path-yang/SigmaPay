@@ -37,6 +37,7 @@ export async function createDID(
   didData: Partial<SigmaPayDID>
 ): Promise<{ success: boolean; hash?: string; error?: string }> {
   try {
+    console.log("Creating DID for wallet:", wallet.classicAddress);
     const client = await getClient();
 
     // Create DID document data
@@ -50,6 +51,8 @@ export async function createDID(
       phone: didData.phone,
       kycCompleted: didData.kycCompleted || false,
     };
+
+    console.log("DID document:", didDocument);
 
     // Convert to hex for storage
     const didDocumentHex = Buffer.from(JSON.stringify(didDocument), "utf8")
@@ -68,22 +71,34 @@ export async function createDID(
       URI: uriHex,
     };
 
-    const prepared = await client.autofill(didSet);
+    console.log("Preparing DIDSet transaction...");
+    const prepared = await client.autofill(didSet, {
+      maxLedgerVersionOffset: 75, // Increase timeout to ~5 minutes
+    });
+    console.log("Transaction prepared, signing...");
     const signed = wallet.sign(prepared);
-    const result = await client.submitAndWait(signed.tx_blob);
+    console.log("Transaction signed, submitting...");
+    const result = await client.submitAndWait(signed.tx_blob, {
+      autofill: false,
+      failHard: false,
+    });
 
     const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
+    console.log("Transaction result:", txResult);
 
     if (txResult.meta?.TransactionResult === "tesSUCCESS") {
+      console.log("DID created successfully! Hash:", txResult.hash);
       return {
         success: true,
         hash: txResult.hash,
       };
     }
 
+    const errorMsg = txResult.meta?.TransactionResult || "Transaction failed";
+    console.error("DID creation failed:", errorMsg);
     return {
       success: false,
-      error: txResult.meta?.TransactionResult || "Transaction failed",
+      error: errorMsg,
     };
   } catch (error) {
     console.error("Error creating DID:", error);

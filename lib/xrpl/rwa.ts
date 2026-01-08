@@ -153,70 +153,118 @@ export async function issueRWAToken(
   currencyName: string,
   metadata: RWAMetadata
 ): Promise<RWAIssuanceResult> {
-  try {
-    // Check verification
-    const canIssue = await canIssueRWA(wallet.classicAddress);
-    if (!canIssue.allowed) {
-      return { success: false, error: canIssue.reason };
-    }
+  const MAX_RETRIES = 2;
+  let lastError = "";
 
-    const client = await getClient();
-    const currency = currencyToXRPL(currencyName);
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`=== Starting RWA Token Issuance (Attempt ${attempt}/${MAX_RETRIES}) ===`);
+      console.log("Wallet:", wallet.classicAddress);
+      console.log("Currency Name:", currencyName);
+      
+      // Check verification (only on first attempt)
+      if (attempt === 1) {
+        console.log("Checking if user can issue RWA...");
+        const canIssue = await canIssueRWA(wallet.classicAddress);
+        console.log("Can issue RWA:", canIssue);
+        
+        if (!canIssue.allowed) {
+          return { success: false, error: canIssue.reason };
+        }
+      }
 
-    console.log("Issuing RWA token:", currencyName, "->", currency);
-    console.log("Metadata:", metadata);
+      console.log("Connecting to XRPL client...");
+      const client = await getClient();
+      const currency = currencyToXRPL(currencyName);
 
-    // For IOUs, the issuer doesn't need to create a trustline to themselves
-    // Recipients will create trustlines to the issuer
-    // We'll record the issuance via a self-payment with metadata
+      console.log("Issuing RWA token:", currencyName, "->", currency);
+      console.log("Metadata:", metadata);
 
-    // Create a "registration" transaction - payment to self with 0 value
-    // This records the RWA creation on-chain with metadata
-    const registration: Payment = {
-      TransactionType: "Payment",
-      Account: wallet.classicAddress,
-      Destination: wallet.classicAddress,
-      Amount: "1", // Minimal XRP to self (will be returned minus fee)
-      Memos: metadataToMemo({
-        ...metadata,
-        createdAt: new Date().toISOString(),
-      }),
-    };
+      // For IOUs, the issuer doesn't need to create a trustline to themselves
+      // Recipients will create trustlines to the issuer
+      // We'll record the issuance via a self-payment with metadata
 
-    const prepared = await client.autofill(registration);
-    const signed = wallet.sign(prepared);
-    const result = await client.submitAndWait(signed.tx_blob);
+      // Create a "registration" transaction - payment to self with 0 value
+      // This records the RWA creation on-chain with metadata
+      const registration: Payment = {
+        TransactionType: "Payment",
+        Account: wallet.classicAddress,
+        Destination: wallet.classicAddress,
+        Amount: "1", // Minimal XRP to self (will be returned minus fee)
+        Memos: metadataToMemo({
+          ...metadata,
+          createdAt: new Date().toISOString(),
+        }),
+      };
 
-    const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
-
-    if (txResult.meta?.TransactionResult === "tesSUCCESS") {
-      // Store the RWA info locally
-      storeRWAToken(wallet.classicAddress, {
-        currency,
-        currencyDisplay: currencyName,
-        issuer: wallet.classicAddress,
-        balance: metadata.totalSupply,
-        metadata: { ...metadata, createdAt: new Date().toISOString() },
+      console.log("Preparing transaction...");
+      const prepared = await client.autofill(registration, {
+        maxLedgerVersionOffset: 75, // Increase timeout from default ~20 to 75 ledgers (~5 minutes)
+      });
+      console.log("Transaction prepared, signing...");
+      const signed = wallet.sign(prepared);
+      console.log("Transaction signed, submitting to ledger...");
+      const result = await client.submitAndWait(signed.tx_blob, {
+        autofill: false,
+        failHard: false,
       });
 
-      return {
-        success: true,
-        currency,
-        hash: txResult.hash,
-      };
-    }
+      const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
+      console.log("Transaction result:", txResult);
 
-    return {
-      success: false,
-      error: txResult.meta?.TransactionResult || "Failed to issue RWA token",
-    };
-  } catch (error) {
-    console.error("RWA issuance error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to issue RWA token",
-    };
+      if (txResult.meta?.TransactionResult === "tesSUCCESS") {
+        console.log("✅ RWA token created successfully!");
+        
+        // Store the RWA info locally
+        storeRWAToken(wallet.classicAddress, {
+          currency,
+          currencyDisplay: currencyName,
+          issuer: wallet.classicAddress,
+          balance: metadata.totalSupply,
+          metadata: { ...metadata, createdAt: new Date().toISOString() },
+        });
+
+        return {
+          success: true,
+          currency,
+          hash: txResult.hash,
+        };
+      }
+
+      const errorMsg = txResult.meta?.TransactionResult || "Failed to issue RWA token";
+      console.error("❌ RWA token creation failed:", errorMsg);
+      lastError = errorMsg;
+      
+      // Don't retry on certain errors
+      if (errorMsg.includes("tecUNFUNDED") || errorMsg.includes("temBAD")) {
+        return { success: false, error: errorMsg };
+      }
+      
+      // Retry on timeout errors
+      if (attempt < MAX_RETRIES && (errorMsg.includes("temREDUNDANT") || errorMsg.includes("tefPAST_SEQ"))) {
+        console.log(`⏳ Transaction timed out, retrying in 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue;
+      }
+      
+      return { success: false, error: errorMsg };
+    } catch (error) {
+      console.error(`❌ RWA issuance error (attempt ${attempt}):`, error);
+      lastError = error instanceof Error ? error.message : "Failed to issue RWA token";
+      
+      // Retry on network errors
+      if (attempt < MAX_RETRIES) {
+        console.log(`⏳ Retrying in 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue;
+      }
+    }
   }
+
+  return {
+    success: false,
+    error: `Failed after ${MAX_RETRIES} attempts. Last error: ${lastError}`,
+  };
 }
 
 /**

@@ -66,10 +66,15 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
   };
 
   const handleSubmit = async () => {
-    if (!wallet || !category) return;
+    if (!wallet || !category) {
+      console.error("Cannot tokenize: missing wallet or category");
+      return;
+    }
 
     setLoading(true);
     try {
+      console.log("Starting tokenization:", { name, symbol, category, totalSupply });
+      
       const result = await issueRWAToken(wallet, symbol || name.substring(0, 5).toUpperCase(), {
         name,
         description,
@@ -82,6 +87,8 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
         createdAt: new Date().toISOString(),
       });
 
+      console.log("Tokenization result:", result);
+
       if (result.success) {
         setResultCurrency(result.currency || symbol);
         setResultHash(result.hash || "");
@@ -89,12 +96,19 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
         toast({ title: "Asset Tokenized!", description: `Created ${name} (${symbol})`, variant: "success" });
         onSuccess?.(result.currency || "", result.hash);
       } else {
-        toast({ title: "Tokenization Failed", description: result.error, variant: "destructive" });
+        const errorMsg = result.error || "Unknown error occurred";
+        console.error("Tokenization failed:", errorMsg);
+        toast({ 
+          title: "Tokenization Failed", 
+          description: errorMsg + ". Check console for details.",
+          variant: "destructive" 
+        });
       }
     } catch (error) {
+      console.error("Tokenization error:", error);
       toast({ 
         title: "Error", 
-        description: error instanceof Error ? error.message : "Failed to tokenize asset", 
+        description: error instanceof Error ? error.message : "Failed to tokenize asset. Check console for details.", 
         variant: "destructive" 
       });
     } finally {
