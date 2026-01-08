@@ -54,7 +54,7 @@ export function EscrowList() {
       // Get escrows from local storage (includes fulfillments)
       const storedEscrows = getStoredEscrows(address);
 
-      // Merge chain escrows with stored data
+      // Merge chain escrows with stored data for SENT escrows
       const mergedSent = chainEscrows.sent.map(escrow => {
         const stored = storedEscrows.sent.find(
           s => s.owner === escrow.owner && s.sequence === escrow.sequence
@@ -65,18 +65,41 @@ export function EscrowList() {
         return escrow;
       });
 
-      // Add any stored escrows not on chain (might be finished/cancelled)
+      // Add any stored sent escrows not on chain (might be finished/cancelled)
       for (const stored of storedEscrows.sent) {
         if (!mergedSent.find(e => 
           e.owner === stored.owner && e.sequence === stored.sequence
         )) {
           // Mark as possibly completed if not on chain
-          setSentEscrows(prev => [...prev, { ...stored, status: "completed" as const }]);
+          mergedSent.push({ ...stored, status: "completed" as const });
+        }
+      }
+
+      // Merge chain escrows with stored data for RECEIVED escrows
+      // Chain escrows have the authoritative status, stored escrows may have extra data
+      const mergedReceived = chainEscrows.received.map(escrow => {
+        const stored = storedEscrows.received.find(
+          s => s.owner === escrow.owner && s.sequence === escrow.sequence
+        );
+        if (stored) {
+          // Merge stored data (like fulfillment) but use chain status
+          return { ...escrow, ...stored, status: escrow.status };
+        }
+        return escrow;
+      });
+
+      // Add any stored received escrows not on chain (might be finished/cancelled)
+      for (const stored of storedEscrows.received) {
+        if (!mergedReceived.find(e => 
+          e.owner === stored.owner && e.sequence === stored.sequence
+        )) {
+          // Mark as possibly completed if not on chain
+          mergedReceived.push({ ...stored, status: "completed" as const });
         }
       }
 
       setSentEscrows(mergedSent);
-      setReceivedEscrows([...chainEscrows.received, ...storedEscrows.received]);
+      setReceivedEscrows(mergedReceived);
     } catch (error) {
       console.error("Failed to fetch escrows:", error);
       toast({

@@ -180,8 +180,8 @@ export function TransactionHistory() {
                                             case "sent": return "To";
                                             case "received": return "From";
                                             case "escrow_created": return "To";
-                                            case "escrow_finished": return "From";
-                                            case "escrow_cancelled": return "Owner";
+                                            case "escrow_finished": return "With";
+                                            case "escrow_cancelled": return "For";
                                             default: return "";
                                         }
                                     };
@@ -204,6 +204,7 @@ export function TransactionHistory() {
                                                         <span className="font-semibold text-slate-900">
                                                             {tx.type === "sent" || tx.type === "escrow_created" ? "-" : ""}
                                                             {tx.type === "received" || tx.type === "escrow_finished" ? "+" : ""}
+                                                            {tx.type === "escrow_cancelled" ? "↩ " : ""}
                                                             {formatAmount(tx.amount)} {tx.currency}
                                                         </span>
                                                     </div>
