@@ -17,7 +17,8 @@ import {
     X,
     Shield,
     Briefcase,
-    Lock
+    Lock,
+    ArrowLeftRight
 } from "lucide-react";
 import { useState } from "react";
 
@@ -162,6 +163,13 @@ export function Navbar() {
                             <Button variant="outline" className="w-full mb-2">
                                 <Briefcase className="w-4 h-4 mr-2" />
                                 RWA Marketplace
+                            </Button>
+                        </Link>
+
+                        <Link href="/trade" onClick={() => setMobileMenuOpen(false)}>
+                            <Button variant="outline" className="w-full mb-2">
+                                <ArrowLeftRight className="w-4 h-4 mr-2" />
+                                Trade RWA
                             </Button>
                         </Link>
 

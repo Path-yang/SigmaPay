@@ -26,7 +26,8 @@ import {
   Sparkles,
   Search,
   Filter,
-  ArrowUpDown
+  ArrowUpDown,
+  ArrowLeftRight
 } from "lucide-react";
 
 export default function RWAPage() {
@@ -246,6 +247,10 @@ export default function RWAPage() {
             <Button variant="outline" onClick={() => setShowAddTokenDialog(true)}>
               <Search className="w-4 h-4 mr-2" />
               Add Token
+            </Button>
+            <Button variant="outline" onClick={() => router.push("/trade")}>
+              <ArrowLeftRight className="w-4 h-4 mr-2" />
+              Trade
             </Button>
             <Button onClick={() => router.push("/tokenize")}>
               <Plus className="w-4 h-4 mr-2" />
