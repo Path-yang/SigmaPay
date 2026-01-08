@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { Wallet } from "xrpl";
 import { getStoredWallet, decryptSeed, clearStoredWallet, saveWallet, hasStoredWallet } from "@/lib/utils/encryption";
-import { generateWallet, importWallet, getWalletFromSeed, fundExistingWallet } from "@/lib/xrpl/wallet";
+import { generateWallet, importWallet, getWalletFromSeed, fundWalletFromFaucet } from "@/lib/xrpl/wallet";
 import { getBalances, isAccountFunded } from "@/lib/xrpl/balance";
 import { createRLUSDTrustline, checkTrustlineExists } from "@/lib/xrpl/trustline";
 import { getClient, disconnectClient } from "@/lib/xrpl/client";
@@ -283,11 +283,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     };
 
     const fundWallet = async (): Promise<boolean> => {
-        if (!wallet) return false;
+        if (!wallet || !address) return false;
 
         try {
             setIsLoading(true);
-            const result = await fundExistingWallet(wallet.seed!);
+            // Use address directly - fundWalletFromFaucet now uses our API route
+            const result = await fundWalletFromFaucet(address);
 
             if (result.success) {
                 await refreshBalances();
