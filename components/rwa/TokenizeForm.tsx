@@ -43,6 +43,7 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
   
   const [step, setStep] = useState<"category" | "details" | "confirm" | "success">("category");
   const [loading, setLoading] = useState(false);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
   
   // Form data
   const [category, setCategory] = useState<RWACategory | null>(null);
@@ -71,9 +72,9 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
       return;
     }
 
-    // Validate symbol - prevent XRP
+    // Validate symbol - prevent XRP and improve validation
     const tokenSymbol = symbol || name.substring(0, 5).toUpperCase();
-    if (tokenSymbol === "XRP" || tokenSymbol.startsWith("XRP")) {
+    if (tokenSymbol.match(/^XRP[A-Z0-9]*$/)) {
       toast({
         title: "Invalid Token Symbol",
         description: "Cannot use 'XRP' as token symbol. XRP is the native currency. Please choose a different symbol.",
@@ -82,11 +83,27 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
       return;
     }
 
+    // Validate total supply
+    const supply = parseFloat(totalSupply);
+    if (isNaN(supply) || supply <= 0 || supply > 1000000000) {
+      toast({
+        title: "Invalid Total Supply",
+        description: "Total supply must be a positive number between 1 and 1,000,000,000.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Create abort controller for cancellation
+    const controller = new AbortController();
+    setAbortController(controller);
     setLoading(true);
+    
     try {
       console.log("Starting tokenization:", { name, symbol: tokenSymbol, category, totalSupply });
       
-      const result = await issueRWAToken(wallet, tokenSymbol, {
+      // Add a timeout wrapper to ensure we don't hang forever
+      const tokenizationPromise = issueRWAToken(wallet, tokenSymbol, {
         name,
         description,
         category,
@@ -97,6 +114,15 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
         issuerName: "SigmaPay User",
         createdAt: new Date().toISOString(),
       });
+      
+      // Overall timeout of 180 seconds (2 minutes) to allow for polling
+      const overallTimeout = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("Tokenization process timed out after 3 minutes. The transaction may still be processing. Please check the transaction hash if provided."));
+        }, 180000); // 3 minutes
+      });
+      
+      const result = await Promise.race([tokenizationPromise, overallTimeout]);
 
       console.log("Tokenization result:", result);
 
@@ -104,28 +130,87 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
         setResultCurrency(result.currency || tokenSymbol);
         setResultHash(result.hash || "");
         setStep("success");
-        toast({ title: "Asset Tokenized!", description: `Created ${name} (${tokenSymbol})`, variant: "success" });
+        setLoading(false); // Reset loading before showing success
+        
+        // Check if we have a hash - if not, transaction might still be pending
+        const hasHash = result.hash && result.hash.length > 0;
+        if (hasHash) {
+          toast({ 
+            title: "Asset Tokenized!", 
+            description: `Created ${name} (${tokenSymbol}). Transaction confirmed on XRPL.`, 
+            variant: "success" 
+          });
+        } else {
+          toast({ 
+            title: "Token Submitted!", 
+            description: `Token ${name} (${tokenSymbol}) submitted. Waiting for confirmation...`, 
+            variant: "default" 
+          });
+        }
+        
         onSuccess?.(result.currency || "", result.hash);
       } else {
         const errorMsg = result.error || "Unknown error occurred";
         console.error("Tokenization failed:", errorMsg);
+        setLoading(false); // Reset loading on failure
+        setAbortController(null);
+        
+        // Handle different types of errors with appropriate messaging
+        let title = "Tokenization Failed";
+        let description = errorMsg;
+        let variant: "destructive" | "default" = "destructive";
+        let shouldResetForm = false;
+        
+        if (errorMsg.includes("submitted") && errorMsg.includes("not confirmed")) {
+          // Transaction was submitted but not confirmed - this is not necessarily an error
+          title = "Transaction Submitted";
+          description = errorMsg + "\n\nYou can check your portfolio later or try creating a different token.";
+          variant = "default";
+          shouldResetForm = true;
+        } else if (errorMsg.includes("timeout") || errorMsg.includes("slow")) {
+          title = "Network Timeout";
+          description = `The transaction timed out. This usually means:\n\n• The testnet is experiencing high load\n• Your transaction may still be processing\n• Try checking your portfolio in a few minutes\n• Ensure you have sufficient XRP (~0.00001 XRP) for fees`;
+        } else if (errorMsg.includes("metadata is too large")) {
+          title = "Metadata Too Large";
+          description = "Please reduce the length of your token description or other fields.";
+        } else if (errorMsg.includes("Cannot create XRP")) {
+          title = "Invalid Token Symbol";
+          description = "Please choose a different token symbol that doesn't start with 'XRP'.";
+        } else if (errorMsg.includes("already exists in your portfolio")) {
+          title = "Duplicate Token Symbol";
+          description = errorMsg + " You can view your existing tokens in the RWA portfolio.";
+          shouldResetForm = true;
+        } else if (errorMsg.includes("temREDUNDANT") || errorMsg.includes("redundant")) {
+          title = "Duplicate Transaction";
+          description = "This token creation request is identical to a recent one. Please wait a moment and try again with a different token name, or check your portfolio to see if the token was already created.";
+          shouldResetForm = true;
+        }
+        
         toast({ 
-          title: "Tokenization Failed", 
-          description: errorMsg,
-          variant: "destructive" 
+          title, 
+          description,
+          variant,
+          duration: 15000 // Show longer for error messages
         });
-        // Reset loading state on failure
-        setLoading(false);
+        
+        if (shouldResetForm) {
+          setStep("category");
+          resetForm();
+        } else {
+          // Keep them on the confirm step so they can retry or go back
+          setStep("confirm");
+        }
       }
     } catch (error) {
       console.error("Tokenization error:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to tokenize asset";
+      setLoading(false); // Always reset loading in catch block
+      setAbortController(null);
       toast({ 
         title: "Error", 
         description: errorMessage,
         variant: "destructive" 
       });
-      setLoading(false);
     }
   };
 
@@ -151,13 +236,29 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
             Verification Required
           </CardTitle>
           <CardDescription className="text-amber-700">
-            You must verify your identity to tokenize real-world assets. This ensures compliance and builds trust.
+            You must verify your identity to tokenize real-world assets. This ensures compliance and builds trust with recipients. Tokens created are recorded on the XRP Ledger and can be transferred globally.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Button asChild className="w-full">
-            <a href="/verify">Verify Identity</a>
+        <CardContent className="space-y-4">
+          <div className="p-4 bg-white rounded-lg border border-amber-200">
+            <h4 className="font-semibold text-amber-900 mb-2">Verification Options:</h4>
+            <ul className="space-y-2 text-sm text-amber-800">
+              <li className="flex items-start gap-2">
+                <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span><strong>Basic Verification:</strong> Name + Email (allows tokenization)</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span><strong>Full Verification:</strong> Name + Email + Phone (recommended for unlimited features)</span>
+              </li>
+            </ul>
+          </div>
+          <Button asChild className="w-full bg-amber-600 hover:bg-amber-700">
+            <a href="/verify">Go to Verification Page</a>
           </Button>
+          <p className="text-xs text-amber-600 text-center">
+            After verification, return here to tokenize your assets
+          </p>
         </CardContent>
       </Card>
     );
@@ -365,20 +466,47 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
             )}
           </div>
 
-          <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-700">
-            <strong>Note:</strong> This will create an on-chain token on XRP Ledger Testnet. 
-            A small XRP fee (~0.00001 XRP) will be charged.
+          <div className="space-y-2">
+            <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-700">
+              <strong>Note:</strong> This will create an on-chain token on XRP Ledger Testnet. 
+              A small XRP fee (~0.00001 XRP) will be charged.
+            </div>
+            {loading && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                <strong>Processing:</strong> Transaction may take 30-120 seconds on testnet. 
+                The system will submit the transaction and wait for confirmation. You can cancel if needed.
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button variant="outline" onClick={() => setStep("details")} disabled={loading} className="flex-1">
-              Back
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                if (loading && abortController) {
+                  abortController.abort();
+                  setLoading(false);
+                  setAbortController(null);
+                  toast({ 
+                    title: "Cancelled", 
+                    description: "Tokenization was cancelled",
+                    variant: "default" 
+                  });
+                } else {
+                  setStep("details");
+                }
+              }} 
+              disabled={false} 
+              className="flex-1"
+            >
+              {loading ? "Cancel" : "Back"}
             </Button>
             <Button onClick={handleSubmit} disabled={loading} className="flex-1">
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Creating...
+                  Creating Token...
+                  <span className="ml-2 text-xs opacity-75">(up to 2 min, may retry)</span>
                 </>
               ) : (
                 <>
@@ -403,7 +531,9 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
           </div>
           <CardTitle className="text-green-800">Asset Tokenized! 🎉</CardTitle>
           <CardDescription className="text-green-700">
-            Your real-world asset has been successfully tokenized on XRPL
+            {resultHash 
+              ? "Your real-world asset has been successfully tokenized and confirmed on XRPL"
+              : "Your token has been submitted and is waiting for confirmation on XRPL"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -416,7 +546,7 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
               <span className="text-slate-600">Symbol</span>
               <span className="font-mono">{resultCurrency}</span>
             </div>
-            {resultHash && (
+            {resultHash ? (
               <div className="pt-2 border-t">
                 <a 
                   href={`https://testnet.xrpl.org/transactions/${resultHash}`}
@@ -426,6 +556,12 @@ export function TokenizeForm({ onSuccess }: TokenizeFormProps) {
                 >
                   View on XRPL Explorer →
                 </a>
+              </div>
+            ) : (
+              <div className="pt-2 border-t">
+                <p className="text-xs text-amber-600">
+                  ⚠️ Transaction is still being processed. Your token will appear in your portfolio once confirmed.
+                </p>
               </div>
             )}
           </div>

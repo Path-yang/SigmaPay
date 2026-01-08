@@ -78,9 +78,13 @@ export default function VerifyPage() {
             if (success) {
                 toast({ 
                     title: "Basic Verification Complete! 🎉", 
-                    description: "You can now send up to $1,000 via direct payments",
+                    description: "You can now tokenize assets and send up to $1,000 via direct payments",
                     variant: "success" 
                 });
+                // Redirect to tokenize page after a short delay
+                setTimeout(() => {
+                    router.push("/tokenize");
+                }, 2000);
             } else {
                 toast({ 
                     title: "Verification Failed", 
@@ -114,9 +118,13 @@ export default function VerifyPage() {
             if (success) {
                 toast({ 
                     title: "Full Verification Complete! 🎉", 
-                    description: "You now have unlimited transfer limits",
+                    description: "You can now tokenize assets and have unlimited transfer limits",
                     variant: "success" 
                 });
+                // Redirect to tokenize page after a short delay
+                setTimeout(() => {
+                    router.push("/tokenize");
+                }, 2000);
             } else {
                 toast({ 
                     title: "Verification Failed", 
@@ -189,12 +197,19 @@ export default function VerifyPage() {
                             <p className="text-emerald-700 mb-6">
                                 You have access to all features including unlimited transfers and instant settlement.
                             </p>
-                            <Link href="/send">
-                                <Button className="bg-emerald-600 hover:bg-emerald-700">
-                                    Send a Gift
-                                    <ArrowRight className="w-4 h-4 ml-2" />
-                                </Button>
-                            </Link>
+                            <div className="flex gap-3 justify-center">
+                                <Link href="/tokenize">
+                                    <Button className="bg-emerald-600 hover:bg-emerald-700">
+                                        Tokenize Assets
+                                        <ArrowRight className="w-4 h-4 ml-2" />
+                                    </Button>
+                                </Link>
+                                <Link href="/send">
+                                    <Button variant="outline" className="border-emerald-600 text-emerald-700">
+                                        Send a Gift
+                                    </Button>
+                                </Link>
+                            </div>
                         </CardContent>
                     </Card>
                 ) : (

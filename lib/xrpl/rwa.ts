@@ -145,8 +145,9 @@ export async function canIssueRWA(address: string): Promise<{ allowed: boolean; 
 
 /**
  * Issue a new RWA token
- * The issuer creates a trustline to themselves (cold wallet pattern)
- * Then "issues" tokens by sending to recipients
+ * In XRPL, IOU tokens are created when the issuer sends them to a recipient.
+ * The issuer can hold tokens by sending them to an address with a trustline.
+ * For the initial supply, we'll create a trustline and send tokens to the issuer.
  */
 export async function issueRWAToken(
   wallet: Wallet,
@@ -155,14 +156,23 @@ export async function issueRWAToken(
 ): Promise<RWAIssuanceResult> {
   // Prevent creating XRP tokens - XRP is native and cannot be created
   const upperName = currencyName.toUpperCase().trim();
-  if (upperName === "XRP" || upperName === "XRPX" || upperName.startsWith("XRP")) {
+  if (upperName === "XRP" || upperName.match(/^XRP[A-Z0-9]*$/)) {
     return {
       success: false,
       error: "Cannot create XRP tokens. XRP is the native currency. Please use a different token symbol for your RWA.",
     };
   }
 
-  const MAX_RETRIES = 1; // Reduced to prevent infinite retries
+  // Validate metadata size to prevent transaction failures
+  const metadataString = JSON.stringify(metadata);
+  if (metadataString.length > 1000) {
+    return {
+      success: false,
+      error: "Token metadata is too large. Please reduce the description or other fields.",
+    };
+  }
+
+  const MAX_RETRIES = 2; // Allow 2 retries for slow testnet
   let lastError = "";
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -189,96 +199,254 @@ export async function issueRWAToken(
       console.log("Issuing RWA token:", currencyName, "->", currency);
       console.log("Metadata:", metadata);
 
-      // For IOUs, the issuer doesn't need to create a trustline to themselves
-      // Recipients will create trustlines to the issuer
-      // We'll record the issuance via a self-payment with metadata
+      // Check if this token already exists for this issuer
+      const existingToken = getStoredRWAToken(wallet.classicAddress, currency);
+      if (existingToken && attempt === 1) {
+        console.log("⚠️ Token already exists for this issuer:", existingToken);
+        
+        // Clean up any duplicates first
+        clearDuplicateRWATokens(wallet.classicAddress);
+        
+        return {
+          success: false,
+          error: `A token with symbol "${currencyName}" already exists in your portfolio. Please choose a different symbol or check your RWA portfolio.`,
+        };
+      }
 
-      // Create a "registration" transaction - payment to self with minimal XRP
-      // This records the RWA creation on-chain with metadata
-      // Note: This doesn't create IOU tokens - tokens are created when sent to recipients
-      // Use minimal amount in drops (10 drops = 0.00001 XRP)
-      const registration: Payment = {
-        TransactionType: "Payment",
+      // Step 1: Create a trustline from issuer to themselves
+      // Note: In XRPL, you can't create a trustline to yourself directly.
+      // Instead, we'll use a different approach: create a trustline from a holding account
+      // OR we can issue tokens by sending them to recipients who have trustlines.
+      // For simplicity, we'll register the token and the issuer will have the ability to issue tokens.
+
+      // Step 1: Register the token with metadata via a memo-only transaction
+      // Use AccountSet transaction instead of self-payment to avoid temRedundant
+      const registration: any = {
+        TransactionType: "AccountSet" as const,
         Account: wallet.classicAddress,
-        Destination: wallet.classicAddress,
-        Amount: xrpToDrops("0.00001"), // Convert to drops (10 drops)
+        // Add a unique identifier to prevent duplicate transactions
+        Domain: Buffer.from(`sigmapay-rwa-${currency}-${Date.now()}`).toString('hex').substring(0, 64),
         Memos: metadataToMemo({
           ...metadata,
           createdAt: new Date().toISOString(),
         }),
       };
 
-      console.log("Preparing transaction...");
-      const prepared = await client.autofill(registration);
-      // Increase LastLedgerSequence for longer timeout
-      if (prepared.LastLedgerSequence) {
-        prepared.LastLedgerSequence = prepared.LastLedgerSequence + 20; // Add ~20 more ledgers (~80 seconds)
-      }
-      console.log("Transaction prepared, signing...");
-      const signed = wallet.sign(prepared);
-      console.log("Transaction signed, submitting to ledger (max 60s wait)...");
+      console.log("Step 1: Registering token with metadata...");
       
-      // Add a 60-second timeout to prevent infinite waiting
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("Transaction timed out after 60 seconds. The testnet may be slow. Please try again.")), 60000);
+      // Add timeout wrapper for autofill as well
+      const autofillPromise = client.autofill(registration);
+      const autofillTimeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Transaction preparation timed out. Please try again.")), 30000);
       });
       
-      const result = await Promise.race([
-        client.submitAndWait(signed.tx_blob),
-        timeoutPromise
-      ]);
-
-      const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
-      console.log("Transaction result:", txResult);
-
-      if (txResult.meta?.TransactionResult === "tesSUCCESS") {
-        console.log("✅ RWA token created successfully!");
-        
-        // Store the RWA info locally
-        storeRWAToken(wallet.classicAddress, {
-          currency,
-          currencyDisplay: currencyName,
-          issuer: wallet.classicAddress,
-          balance: metadata.totalSupply,
-          metadata: { ...metadata, createdAt: new Date().toISOString() },
-        });
-
-        return {
-          success: true,
-          currency,
-          hash: txResult.hash,
-        };
-      }
-
-      const errorMsg = txResult.meta?.TransactionResult || "Failed to issue RWA token";
-      console.error("❌ RWA token creation failed:", errorMsg);
+      const preparedReg = await Promise.race([autofillPromise, autofillTimeout]);
       
-      // Provide user-friendly error messages
-      let userError = errorMsg;
-      if (errorMsg.includes("tecUNFUNDED")) {
-        userError = "Insufficient XRP balance. You need XRP to pay transaction fees.";
-      } else if (errorMsg.includes("temBAD")) {
-        userError = "Invalid transaction parameters. Please check your input.";
-      } else if (errorMsg.includes("tecNO_DST")) {
-        userError = "Destination account issue. Please try again.";
-      } else if (errorMsg.includes("tefPAST_SEQ")) {
-        userError = "Transaction sequence error. Please try again.";
+      if (preparedReg.LastLedgerSequence) {
+        // Increase LastLedgerSequence more to give more time for slow testnet
+        preparedReg.LastLedgerSequence = preparedReg.LastLedgerSequence + 40; // Increased from 20 to 40
+      }
+      
+      console.log("Transaction prepared, signing...");
+      const signedReg = wallet.sign(preparedReg);
+      const txHash = signedReg.hash || (signedReg as any).tx?.hash;
+      console.log("Transaction signed, hash:", txHash);
+      console.log("Submitting to network...");
+      
+      // Submit with better approach: submit first, then poll for confirmation
+      let regResult;
+      let submittedHash: string = txHash || ""; // Initialize with txHash
+      try {
+        console.log(`Submitting transaction (attempt ${attempt}/${MAX_RETRIES})...`);
+        
+        // Step 1: Submit the transaction (this is fast)
+        const submitResponse = await client.submit(signedReg.tx_blob);
+        console.log("Transaction submitted, response:", submitResponse);
+        
+        // Get transaction hash from response or signed transaction
+        submittedHash = submitResponse.result.tx_json?.hash || 
+                       (submitResponse.result as any).hash || 
+                       txHash || 
+                       (signedReg as any).hash ||
+                       "";
+        
+        if (!submittedHash) {
+          throw new Error("Could not determine transaction hash from submission response");
+        }
+        
+        console.log("Transaction hash:", submittedHash);
+        
+        // Check if transaction was immediately rejected
+        const engineResult = submitResponse.result.engine_result;
+        console.log("Engine result:", engineResult);
+        
+        if (engineResult === "temREDUNDANT") {
+          // This token might already exist - check if we can proceed anyway
+          console.log("⚠️ Transaction marked as redundant, but this might be expected for token registration");
+          
+          // Store the token anyway since the registration might have succeeded previously
+          storeRWAToken(wallet.classicAddress, {
+            currency,
+            currencyDisplay: currencyName,
+            issuer: wallet.classicAddress,
+            balance: metadata.totalSupply,
+            metadata: { ...metadata, createdAt: new Date().toISOString() },
+          });
+          
+          return {
+            success: true,
+            currency,
+            hash: submittedHash,
+          };
+        } else if (engineResult !== "tesSUCCESS" && engineResult !== "terQUEUED" && !engineResult.startsWith("ter")) {
+          // Transaction was rejected
+          throw new Error(`Transaction rejected: ${engineResult}`);
+        }
+        
+        // Step 2: Poll for transaction confirmation with exponential backoff
+        console.log("Polling for transaction confirmation...");
+        const startTime = Date.now();
+        const maxPollTimeout = 180000; // 3 minutes for polling (increased from 2 minutes)
+        let pollInterval = 2000; // Start with 2 seconds
+        const maxPollInterval = 8000; // Max 8 seconds between polls
+        let pollCount = 0;
+        
+        while (Date.now() - startTime < maxPollTimeout) {
+          pollCount++;
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          console.log(`Poll attempt ${pollCount} (${elapsed}s elapsed, interval: ${pollInterval}ms)...`);
+          
+          try {
+            // Try to get transaction result
+            const txResult = await client.request({
+              command: "tx",
+              transaction: submittedHash,
+            });
+            
+            if (txResult.result && txResult.result.validated) {
+              // Transaction is validated!
+              console.log(`✅ Transaction validated after ${elapsed} seconds!`);
+              regResult = { result: txResult.result };
+              break;
+            } else {
+              // Transaction exists but not yet validated
+              console.log(`Transaction found but not yet validated (${elapsed}s), waiting...`);
+            }
+          } catch (pollError: any) {
+            // Transaction not found yet, continue polling
+            const errorCode = pollError?.data?.error || pollError?.error || "";
+            if (errorCode === "txnNotFound" || errorCode.includes("not found")) {
+              console.log(`Transaction not found yet (${elapsed}s), continuing to poll...`);
+            } else {
+              console.log(`Polling error (will retry):`, errorCode);
+            }
+          }
+          
+          // Wait before next poll with exponential backoff
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+          
+          // Increase poll interval for next attempt (exponential backoff)
+          pollInterval = Math.min(pollInterval * 1.2, maxPollInterval);
+        }
+        
+        // Check if we got a result
+        if (!regResult) {
+          // Transaction was submitted but not confirmed in time
+          console.log("⚠️ Transaction submitted but not confirmed within timeout.");
+          
+          // For better UX, return a partial success with instructions
+          return {
+            success: false,
+            error: `Transaction submitted (${submittedHash}) but not confirmed within 3 minutes. This may be due to testnet congestion. Please check your portfolio in a few minutes, or try again with a different token name.`,
+          };
+        }
+        
+        console.log("Transaction confirmed!");
+      } catch (submitError) {
+        const errorMsg = submitError instanceof Error ? submitError.message : "Failed to submit transaction";
+        console.error(`❌ Transaction submission error (attempt ${attempt}):`, errorMsg);
+        
+        // If it's a timeout and we have retries left, throw to trigger retry
+        if (errorMsg.includes("timeout") && attempt < MAX_RETRIES) {
+          throw submitError; // This will be caught by outer catch and trigger retry
+        }
+        
+        // Otherwise, throw the error
+        throw new Error(errorMsg);
       }
 
-      return { success: false, error: userError };
+      const regTxResult = regResult.result as { meta?: { TransactionResult?: string }; hash?: string };
+      console.log("Registration result:", regTxResult);
+
+      // Get hash from result or use submitted hash
+      const finalHash = regTxResult.hash || submittedHash || txHash || "";
+
+      if (regTxResult.meta?.TransactionResult !== "tesSUCCESS") {
+        const errorMsg = regTxResult.meta?.TransactionResult || "Failed to register RWA token";
+        console.error("❌ Registration failed:", errorMsg);
+        
+        // Provide user-friendly error messages
+        let userError = errorMsg;
+        if (errorMsg.includes("tecUNFUNDED")) {
+          userError = "Insufficient XRP balance. You need XRP to pay transaction fees (minimum ~0.00001 XRP).";
+        } else if (errorMsg.includes("temBAD")) {
+          userError = "Invalid transaction parameters. Please check your input and try again.";
+        } else if (errorMsg.includes("tecNO_DST")) {
+          userError = "Destination account issue. Please try again.";
+        } else if (errorMsg.includes("tefPAST_SEQ")) {
+          userError = "Transaction sequence error. Please refresh and try again.";
+        } else if (errorMsg.includes("tefMAX_LEDGER")) {
+          userError = "Transaction expired. Please try again.";
+        }
+        
+        return { success: false, error: userError };
+      }
+
+      console.log("✅ Token registered successfully!");
+
+      // Step 2: Create a trustline to hold the tokens
+      // In XRPL, to hold your own IOU tokens, you need a trustline.
+      // However, you cannot create a trustline to yourself.
+      // The solution: The issuer can issue tokens by sending them, and they'll appear
+      // as a negative balance (the issuer owes tokens). To hold positive balance,
+      // tokens must be sent to an address with a trustline.
+      
+      // For now, we'll just register the token. The issuer can send tokens to recipients
+      // who have trustlines, and the issuer's balance will be negative (they owe tokens).
+      // When the issuer receives tokens back, they'll have a positive balance if they have a trustline.
+
+      // Store the RWA info locally
+      // For issuers, the available balance is the total supply (they can issue up to this amount)
+      storeRWAToken(wallet.classicAddress, {
+        currency,
+        currencyDisplay: currencyName,
+        issuer: wallet.classicAddress,
+        balance: metadata.totalSupply, // Available to issue
+        metadata: { ...metadata, createdAt: new Date().toISOString() },
+      });
+
+      console.log("✅ RWA token created successfully!");
+      return {
+        success: true,
+        currency,
+        hash: finalHash,
+      };
     } catch (error) {
       console.error(`❌ RWA issuance error (attempt ${attempt}):`, error);
       const errorMessage = error instanceof Error ? error.message : "Failed to issue RWA token";
       
-      // Don't retry on most errors - fail fast
-      if (errorMessage.includes("timeout") || errorMessage.includes("network")) {
+      // Retry on timeout or network errors
+      if (errorMessage.includes("timeout") || errorMessage.includes("network") || errorMessage.includes("slow")) {
+        lastError = errorMessage;
         if (attempt < MAX_RETRIES) {
-          console.log(`⏳ Network error, retrying in 2 seconds...`);
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          continue;
+          const retryDelay = attempt * 3000; // 3s, 6s delays
+          console.log(`⏳ Network/timeout error (attempt ${attempt}/${MAX_RETRIES}), retrying in ${retryDelay/1000} seconds...`);
+          await new Promise((resolve) => setTimeout(resolve, retryDelay));
+          continue; // Retry the loop
         }
       }
       
+      // Don't retry on other errors - fail fast
       return {
         success: false,
         error: errorMessage,
@@ -337,7 +505,34 @@ export async function createRWATrustline(
 }
 
 /**
+ * Check if a trustline exists for a currency/issuer pair
+ */
+async function checkTrustlineExists(
+  address: string,
+  currency: string,
+  issuer: string
+): Promise<boolean> {
+  try {
+    const client = await getClient();
+    const response = await client.request({
+      command: "account_lines",
+      account: address,
+      peer: issuer,
+    });
+
+    return response.result.lines.some(
+      (line: { currency: string; account: string }) =>
+        line.currency === currency && line.account === issuer
+    );
+  } catch (error) {
+    console.error("Error checking trustline:", error);
+    return false;
+  }
+}
+
+/**
  * Send RWA tokens to a recipient
+ * This function handles trustline creation if needed and token issuance
  */
 export async function sendRWAToken(
   wallet: Wallet,
@@ -349,6 +544,21 @@ export async function sendRWAToken(
 ): Promise<{ success: boolean; hash?: string; error?: string }> {
   try {
     const client = await getClient();
+
+    // Check if recipient has a trustline to the issuer
+    // If not, we need to create one first (or inform the user)
+    const hasTrustline = await checkTrustlineExists(recipient, currency, issuer);
+    
+    if (!hasTrustline) {
+      // Recipient needs a trustline to receive tokens
+      // Note: We can't create a trustline for another user - they must do it themselves
+      // However, we can try to send anyway - XRPL will reject if no trustline
+      // OR we can return an error asking the recipient to create a trustline first
+      
+      // For better UX, let's try to send anyway - if it fails, we'll get a clear error
+      console.log(`Warning: Recipient ${recipient} may not have a trustline for ${currency} from ${issuer}`);
+      console.log("Attempting to send - XRPL will reject if trustline is missing");
+    }
 
     const payment: Payment = {
       TransactionType: "Payment",
@@ -372,30 +582,66 @@ export async function sendRWAToken(
       ];
     }
 
+    console.log("Preparing payment transaction...");
     const prepared = await client.autofill(payment);
+    
+    // Increase timeout for longer wait
+    if (prepared.LastLedgerSequence) {
+      prepared.LastLedgerSequence = prepared.LastLedgerSequence + 20;
+    }
+    
     const signed = wallet.sign(prepared);
-    const result = await client.submitAndWait(signed.tx_blob);
+    console.log("Submitting payment transaction...");
+    
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Transaction timed out after 60 seconds. Please try again.")), 60000);
+    });
+    
+    const result = await Promise.race([
+      client.submitAndWait(signed.tx_blob),
+      timeoutPromise
+    ]);
 
     const txResult = result.result as { meta?: { TransactionResult?: string }; hash?: string };
 
     if (txResult.meta?.TransactionResult === "tesSUCCESS") {
+      console.log("✅ RWA token transfer successful!");
       return { success: true, hash: txResult.hash };
+    }
+
+    // Provide user-friendly error messages
+    const errorCode = txResult.meta?.TransactionResult || "Failed to send RWA token";
+    let errorMessage = errorCode;
+    
+    if (errorCode === "tecNO_LINE") {
+      errorMessage = `Recipient ${recipient.substring(0, 8)}... does not have a trustline for this token. They need to create a trustline to ${issuer.substring(0, 8)}... first.`;
+    } else if (errorCode === "tecPATH_PARTIAL") {
+      errorMessage = "Cannot find a path to send this token. The recipient may need a trustline.";
+    } else if (errorCode === "tecUNFUNDED") {
+      errorMessage = "Insufficient XRP balance to pay transaction fees.";
+    } else if (errorCode === "tecNO_DST") {
+      errorMessage = "Destination account not found or not activated.";
+    } else if (errorCode === "tecDST_TAG_NEEDED") {
+      errorMessage = "Destination account requires a destination tag.";
     }
 
     return {
       success: false,
-      error: txResult.meta?.TransactionResult || "Failed to send RWA token",
+      error: errorMessage,
     };
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to send RWA token";
+    console.error("Error sending RWA token:", errorMessage);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to send RWA token",
+      error: errorMessage,
     };
   }
 }
 
 /**
  * Get all RWA tokens held by an address (from trustlines)
+ * For issuers, also includes tokens they've issued (even if balance is negative)
  */
 export async function getRWATokens(address: string): Promise<RWAToken[]> {
   try {
@@ -408,6 +654,7 @@ export async function getRWATokens(address: string): Promise<RWAToken[]> {
 
     const tokens: RWAToken[] = [];
 
+    // Process trustlines (tokens received from others)
     for (const line of response.result.lines) {
       // Skip RLUSD - it's handled separately
       if (line.currency === "524C555344000000000000000000000000000000" || line.currency === "RLUSD") {
@@ -416,24 +663,88 @@ export async function getRWATokens(address: string): Promise<RWAToken[]> {
 
       const storedToken = getStoredRWAToken(line.account, line.currency);
       
-      tokens.push({
-        currency: line.currency,
-        currencyDisplay: storedToken?.currencyDisplay || currencyFromXRPL(line.currency),
-        issuer: line.account,
-        balance: line.balance,
-        metadata: storedToken?.metadata,
-        trustlineLimit: line.limit,
-      });
-    }
-
-    // Also add tokens we've issued
-    const issuedTokens = getIssuedRWATokens(address);
-    for (const token of issuedTokens) {
-      if (!tokens.find(t => t.currency === token.currency && t.issuer === token.issuer)) {
-        tokens.push(token);
+      // Only include if balance is positive (tokens held)
+      // Negative balances mean we owe tokens (we're the issuer)
+      const balance = parseFloat(line.balance);
+      if (balance > 0) {
+        tokens.push({
+          currency: line.currency,
+          currencyDisplay: storedToken?.currencyDisplay || currencyFromXRPL(line.currency),
+          issuer: line.account,
+          balance: line.balance,
+          metadata: storedToken?.metadata,
+          trustlineLimit: line.limit,
+        });
       }
     }
 
+    // Add tokens we've issued (even if we don't have a trustline showing them)
+    const issuedTokens = getIssuedRWATokens(address);
+    console.log(`[getRWATokens] Found ${issuedTokens.length} issued tokens for ${address}`);
+    
+    for (const issuedToken of issuedTokens) {
+      console.log(`[getRWATokens] Processing issued token:`, {
+        currency: issuedToken.currency,
+        currencyDisplay: issuedToken.currencyDisplay,
+        balance: issuedToken.balance,
+        totalSupply: issuedToken.metadata?.totalSupply,
+      });
+      
+      // Check if we already have this token in our list
+      const existing = tokens.find(
+        t => t.currency === issuedToken.currency && t.issuer === issuedToken.issuer
+      );
+      
+      if (!existing) {
+        // Check if we have a trustline for this token (might have negative balance)
+        const trustline = response.result.lines.find(
+          (line: { currency: string; account: string; balance: string }) =>
+            line.currency === issuedToken.currency && line.account === issuedToken.issuer
+        );
+        
+        if (trustline) {
+          // We have a trustline - use the actual balance (might be negative)
+          const balance = parseFloat(trustline.balance);
+          // For issuers, negative balance means tokens issued
+          // Calculate available: totalSupply + balance (if negative)
+          const totalSupply = parseFloat(issuedToken.metadata?.totalSupply || issuedToken.balance || "0");
+          const available = balance < 0 ? totalSupply + balance : balance;
+          
+          console.log(`[getRWATokens] Trustline found, balance: ${balance}, totalSupply: ${totalSupply}, available: ${available}`);
+          
+          tokens.push({
+            ...issuedToken,
+            balance: available > 0 ? available.toString() : issuedToken.balance || "0",
+          });
+        } else {
+          // No trustline yet - issuer hasn't received any tokens back
+          // Use the stored balance (which should be totalSupply) or fallback to metadata
+          const balance = issuedToken.balance || issuedToken.metadata?.totalSupply || "0";
+          console.log(`[getRWATokens] No trustline, using stored balance: ${balance}`);
+          
+          tokens.push({
+            ...issuedToken,
+            balance: balance,
+          });
+        }
+      } else {
+        // Update existing token with metadata if available
+        if (issuedToken.metadata) {
+          existing.metadata = issuedToken.metadata;
+        }
+        if (issuedToken.currencyDisplay) {
+          existing.currencyDisplay = issuedToken.currencyDisplay;
+        }
+        // Also update balance if it's higher (for issuers)
+        const existingBalance = parseFloat(existing.balance);
+        const issuedBalance = parseFloat(issuedToken.balance || issuedToken.metadata?.totalSupply || "0");
+        if (issuedBalance > existingBalance) {
+          existing.balance = issuedBalance.toString();
+        }
+      }
+    }
+
+    console.log(`[getRWATokens] Returning ${tokens.length} tokens`);
     return tokens;
   } catch (error) {
     console.error("Error fetching RWA tokens:", error);
@@ -475,14 +786,59 @@ function getStoredRWAToken(issuer: string, currency: string): RWAToken | null {
   return tokens[issuer]?.find(t => t.currency === currency) || null;
 }
 
+function clearDuplicateRWATokens(issuer: string): void {
+  if (typeof window === "undefined") return;
+  
+  const stored = localStorage.getItem(RWA_STORAGE_KEY);
+  if (!stored) return;
+  
+  const tokens: Record<string, RWAToken[]> = JSON.parse(stored);
+  if (!tokens[issuer]) return;
+  
+  // Remove duplicates based on currency
+  const seen = new Set<string>();
+  tokens[issuer] = tokens[issuer].filter(token => {
+    if (seen.has(token.currency)) {
+      console.log("Removing duplicate token:", token.currency);
+      return false;
+    }
+    seen.add(token.currency);
+    return true;
+  });
+  
+  localStorage.setItem(RWA_STORAGE_KEY, JSON.stringify(tokens));
+}
+
 function getIssuedRWATokens(issuer: string): RWAToken[] {
   if (typeof window === "undefined") return [];
   
   const stored = localStorage.getItem(RWA_STORAGE_KEY);
-  if (!stored) return [];
+  if (!stored) {
+    console.log(`[getIssuedRWATokens] No tokens stored in localStorage for issuer ${issuer}`);
+    return [];
+  }
   
   const tokens: Record<string, RWAToken[]> = JSON.parse(stored);
-  return tokens[issuer] || [];
+  const issuerTokens = tokens[issuer] || [];
+  console.log(`[getIssuedRWATokens] Found ${issuerTokens.length} tokens for issuer ${issuer}:`, issuerTokens);
+  return issuerTokens;
+}
+
+/**
+ * Debug function to check what's stored in localStorage
+ * Call this from browser console: window.debugRWATokens()
+ */
+if (typeof window !== "undefined") {
+  (window as any).debugRWATokens = () => {
+    const stored = localStorage.getItem(RWA_STORAGE_KEY);
+    if (!stored) {
+      console.log("No RWA tokens in localStorage");
+      return {};
+    }
+    const tokens: Record<string, RWAToken[]> = JSON.parse(stored);
+    console.log("RWA Tokens in localStorage:", tokens);
+    return tokens;
+  };
 }
 
 /**

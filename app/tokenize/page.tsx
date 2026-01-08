@@ -88,6 +88,10 @@ export default function TokenizePage() {
         <TokenizeForm 
           onSuccess={(currency, hash) => {
             console.log("Tokenized:", currency, hash);
+            // Redirect to RWA page to see the new token
+            setTimeout(() => {
+              router.push("/rwa");
+            }, 1500);
           }}
         />
 

@@ -35,10 +35,15 @@ export function SendRWAForm({ token, onSuccess, onCancel }: SendRWAFormProps) {
   const [success, setSuccess] = useState(false);
   const [txHash, setTxHash] = useState("");
 
+  // For issuers, balance might be totalSupply (from metadata)
+  // For recipients, balance is actual held tokens
   const maxAmount = parseFloat(token.balance);
   const numAmount = parseFloat(amount) || 0;
   const isValidAmount = numAmount > 0 && numAmount <= maxAmount;
   const isValidRecipient = recipient.startsWith("r") && recipient.length >= 25;
+  
+  // Check if user is the issuer
+  const isIssuer = token.issuer === wallet?.classicAddress;
 
   const handleSubmit = async () => {
     if (!wallet || !isValidAmount || !isValidRecipient) return;
@@ -142,10 +147,20 @@ export function SendRWAForm({ token, onSuccess, onCancel }: SendRWAFormProps) {
           <div>
             <p className="font-semibold text-sm">{token.metadata?.name || token.currencyDisplay}</p>
             <p className="text-xs text-slate-500">{token.currencyDisplay}</p>
+            {isIssuer && (
+              <p className="text-xs text-indigo-600 mt-1">You are the issuer</p>
+            )}
           </div>
           <div className="text-right">
-            <p className="text-sm text-slate-600">Available</p>
+            <p className="text-sm text-slate-600">
+              {isIssuer ? "Can Issue" : "Available"}
+            </p>
             <p className="font-bold">{maxAmount.toLocaleString()}</p>
+            {token.metadata?.totalSupply && isIssuer && (
+              <p className="text-xs text-slate-500">
+                Total Supply: {parseFloat(token.metadata.totalSupply).toLocaleString()}
+              </p>
+            )}
           </div>
         </div>
 
