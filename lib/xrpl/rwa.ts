@@ -1129,25 +1129,135 @@ if (typeof window !== "undefined") {
 }
 
 /**
- * Get all RWA tokens in the marketplace (from all issuers)
+ * Fetch token metadata from XRPL ledger by looking at issuer's transactions
+ * This helps discover tokens that aren't in localStorage
  */
+export async function fetchTokenMetadataFromLedger(
+  currency: string, 
+  issuer: string
+): Promise<RWAToken | null> {
+  try {
+    console.log("Fetching token metadata from ledger:", { currency, issuer });
+    const client = await getClient();
+    
+    // Get recent transactions from the issuer to find token creation metadata
+    const response = await client.request({
+      command: "account_tx",
+      account: issuer,
+      limit: 50, // Check last 50 transactions
+      ledger_index_min: -1,
+      ledger_index_max: -1,
+    });
+    
+    // Look for AccountSet transactions with memos that might contain token metadata
+    for (const tx of response.result.transactions) {
+      const transaction = tx.tx;
+      
+      if (transaction?.TransactionType === "AccountSet" && transaction.Memos) {
+        for (const memoWrapper of transaction.Memos) {
+          const memo = memoWrapper.Memo;
+          if (memo?.MemoType && memo.MemoData) {
+            try {
+              const memoType = Buffer.from(memo.MemoType, 'hex').toString('utf8');
+              const memoData = Buffer.from(memo.MemoData, 'hex').toString('utf8');
+              
+              if (memoType === 'rwa_metadata') {
+                const metadata = JSON.parse(memoData);
+                
+                // Check if this metadata is for our token
+                const tokenCurrency = currencyToXRPL(metadata.name || "");
+                if (tokenCurrency === currency || metadata.name === currencyFromXRPL(currency)) {
+                  console.log("Found token metadata on ledger:", metadata);
+                  
+                  return {
+                    currency,
+                    currencyDisplay: currencyFromXRPL(currency),
+                    issuer,
+                    balance: "0", // User doesn't have any yet
+                    metadata: {
+                      ...metadata,
+                      createdAt: metadata.createdAt || (tx.tx?.date ? new Date((tx.tx.date * 1000) + 946684800000).toISOString() : new Date().toISOString()),
+                    }
+                  };
+                }
+              }
+            } catch (error) {
+              // Skip invalid memo data
+              continue;
+            }
+          }
+        }
+      }
+    }
+    
+    // If no metadata found, create a basic token
+    return {
+      currency,
+      currencyDisplay: currencyFromXRPL(currency),
+      issuer,
+      balance: "0",
+      metadata: {
+        name: currencyFromXRPL(currency),
+        description: "Token discovered from XRPL ledger. Create a trustline to receive it.",
+        category: RWACategory.OTHER,
+        totalSupply: "Unknown",
+        createdAt: new Date().toISOString(),
+      }
+    };
+    
+  } catch (error) {
+    console.error("Failed to fetch token metadata from ledger:", error);
+    return null;
+  }
+}
 export function getAllMarketplaceTokens(): RWAToken[] {
   if (typeof window === "undefined") return [];
   
   try {
+    const tokens: RWAToken[] = [];
+    
+    // Get tokens from localStorage
     const stored = localStorage.getItem(RWA_STORAGE_KEY);
-    if (!stored) return [];
-    
-    const tokens: Record<string, RWAToken[]> = JSON.parse(stored);
-    const all: RWAToken[] = [];
-    
-    for (const issuerTokens of Object.values(tokens)) {
-      if (Array.isArray(issuerTokens)) {
-        all.push(...issuerTokens);
+    if (stored) {
+      const localTokens: Record<string, RWAToken[]> = JSON.parse(stored);
+      for (const issuerTokens of Object.values(localTokens)) {
+        if (Array.isArray(issuerTokens)) {
+          tokens.push(...issuerTokens);
+        }
       }
     }
     
-    return all;
+    // Check URL parameters for shared tokens
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenCurrency = urlParams.get('token');
+    const tokenIssuer = urlParams.get('issuer');
+    
+    if (tokenCurrency && tokenIssuer) {
+      // Check if this token is already in our list
+      const existingToken = tokens.find(t => t.currency === tokenCurrency && t.issuer === tokenIssuer);
+      
+      if (!existingToken) {
+        // Create a placeholder token for the shared token
+        const sharedToken: RWAToken = {
+          currency: tokenCurrency,
+          currencyDisplay: currencyFromXRPL(tokenCurrency),
+          issuer: tokenIssuer,
+          balance: "0", // User doesn't have any yet
+          metadata: {
+            name: `Shared Token (${currencyFromXRPL(tokenCurrency)})`,
+            description: "This token was shared with you. Create a trustline to receive it.",
+            category: RWACategory.OTHER,
+            totalSupply: "Unknown",
+            createdAt: new Date().toISOString(),
+          }
+        };
+        
+        tokens.push(sharedToken);
+        console.log("Added shared token from URL:", sharedToken);
+      }
+    }
+    
+    return tokens;
   } catch (error) {
     console.error("Failed to get marketplace tokens:", error);
     return [];
@@ -1206,3 +1316,43 @@ export const DEMO_RWA_TOKENS: RWAToken[] = [
   },
 ];
 
+
+/**
+ * Add a token to marketplace by issuer address and currency
+ * This helps users manually add tokens they know about
+ */
+export async function addTokenToMarketplace(
+  currency: string,
+  issuer: string
+): Promise<{ success: boolean; token?: RWAToken; error?: string }> {
+  try {
+    // First check if token already exists in marketplace
+    const existingTokens = getAllMarketplaceTokens();
+    const existingToken = existingTokens.find(t => t.currency === currency && t.issuer === issuer);
+    
+    if (existingToken) {
+      return { success: true, token: existingToken };
+    }
+    
+    // Try to fetch metadata from ledger
+    const token = await fetchTokenMetadataFromLedger(currency, issuer);
+    
+    if (token) {
+      // Store the token locally so it appears in future marketplace loads
+      storeRWAToken(issuer, token);
+      return { success: true, token };
+    }
+    
+    return {
+      success: false,
+      error: "Could not find token metadata on the ledger. The token may not exist or may not have been created through SigmaPay.",
+    };
+    
+  } catch (error) {
+    console.error("Failed to add token to marketplace:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to add token to marketplace",
+    };
+  }
+}

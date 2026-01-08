@@ -10,9 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { getRWATokens, getAllMarketplaceTokens, RWAToken, DEMO_RWA_TOKENS, RWACategory } from "@/lib/xrpl/rwa";
+import { getRWATokens, getAllMarketplaceTokens, RWAToken, DEMO_RWA_TOKENS, RWACategory, currencyFromXRPL } from "@/lib/xrpl/rwa";
 import { TokenDetailsModal } from "@/components/rwa/TokenDetailsModal";
+import { AddTokenDialog } from "@/components/rwa/AddTokenDialog";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/use-toast";
 import { 
   Loader2, 
   Plus, 
@@ -37,6 +39,7 @@ export default function RWAPage() {
   const [selectedToken, setSelectedToken] = useState<RWAToken | null>(null);
   const [showSendDialog, setShowSendDialog] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [showAddTokenDialog, setShowAddTokenDialog] = useState(false);
   
   // Marketplace filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -62,11 +65,46 @@ export default function RWAPage() {
         console.log("[RWA Page] Loaded tokens:", tokens);
         setMyTokens(tokens);
 
-        // Get marketplace tokens (all issued tokens)
-        const marketplace = getAllMarketplaceTokens();
-        console.log("[RWA Page] Marketplace tokens:", marketplace);
+        // Get marketplace tokens (includes URL-shared tokens)
+        let marketplace = getAllMarketplaceTokens();
+        console.log("[RWA Page] Initial marketplace tokens:", marketplace);
         
-        // Add demo tokens if marketplace is empty
+        // Check if there's a shared token in URL that needs metadata fetching
+        const urlParams = new URLSearchParams(window.location.search);
+        const tokenCurrency = urlParams.get('token');
+        const tokenIssuer = urlParams.get('issuer');
+        
+        if (tokenCurrency && tokenIssuer) {
+          console.log("[RWA Page] Found shared token in URL:", { tokenCurrency, tokenIssuer });
+          
+          // Show notification about shared token
+          toast({
+            title: "Shared Token Detected! 🎯",
+            description: `Found "${currencyFromXRPL(tokenCurrency)}" token shared with you. Check the marketplace to add it to your wallet.`,
+            variant: "default",
+            duration: 8000,
+          });
+          
+          // Try to fetch detailed metadata from the ledger
+          try {
+            const { fetchTokenMetadataFromLedger } = await import("@/lib/xrpl/rwa");
+            const detailedToken = await fetchTokenMetadataFromLedger(tokenCurrency, tokenIssuer);
+            
+            if (detailedToken) {
+              // Replace the placeholder token with detailed metadata
+              marketplace = marketplace.map(token => 
+                token.currency === tokenCurrency && token.issuer === tokenIssuer 
+                  ? detailedToken 
+                  : token
+              );
+              console.log("[RWA Page] Updated shared token with ledger metadata:", detailedToken);
+            }
+          } catch (error) {
+            console.error("[RWA Page] Failed to fetch token metadata from ledger:", error);
+          }
+        }
+        
+        // Add demo tokens if marketplace is empty (but not if we have shared tokens)
         const finalMarketplace = marketplace.length > 0 ? marketplace : DEMO_RWA_TOKENS;
         setMarketplaceTokens(finalMarketplace);
         
@@ -204,10 +242,16 @@ export default function RWAPage() {
             <h1 className="text-2xl font-bold text-slate-800">RWA Marketplace</h1>
             <p className="text-slate-600 text-sm">Tokenize and trade real-world assets globally</p>
           </div>
-          <Button onClick={() => router.push("/tokenize")}>
-            <Plus className="w-4 h-4 mr-2" />
-            Tokenize Asset
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowAddTokenDialog(true)}>
+              <Search className="w-4 h-4 mr-2" />
+              Add Token
+            </Button>
+            <Button onClick={() => router.push("/tokenize")}>
+              <Plus className="w-4 h-4 mr-2" />
+              Tokenize Asset
+            </Button>
+          </div>
         </div>
 
         {/* Portfolio Stats */}
@@ -480,6 +524,17 @@ export default function RWAPage() {
           }}
         />
       )}
+
+      {/* Add Token Dialog */}
+      <AddTokenDialog
+        open={showAddTokenDialog}
+        onClose={() => setShowAddTokenDialog(false)}
+        onTokenAdded={() => {
+          // Refresh marketplace tokens after adding a new token
+          const updatedMarketplace = getAllMarketplaceTokens();
+          setMarketplaceTokens(updatedMarketplace.length > 0 ? updatedMarketplace : DEMO_RWA_TOKENS);
+        }}
+      />
     </div>
   );
 }
