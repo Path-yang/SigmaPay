@@ -50,18 +50,32 @@ export function SendForm() {
 
     // Refresh wallet state when component mounts to ensure trustline status is current
     useEffect(() => {
+        let mounted = true;
+        
         const refresh = async () => {
+            if (!mounted) return;
             setIsRefreshing(true);
             try {
+                console.log("SendForm: Refreshing balances...");
                 await refreshBalances();
+                console.log("SendForm: Refresh complete, hasTrustline will update");
             } catch (e) {
                 console.error("Failed to refresh:", e);
             } finally {
-                setIsRefreshing(false);
+                if (mounted) {
+                    setIsRefreshing(false);
+                }
             }
         };
-        refresh();
-    }, [refreshBalances]);
+        
+        // Small delay to ensure wallet is connected
+        const timer = setTimeout(refresh, 500);
+        
+        return () => {
+            mounted = false;
+            clearTimeout(timer);
+        };
+    }, []);
 
     const amountNum = parseFloat(amount) || 0;
     const balanceNum = parseFloat(balances.rlusd) || 0;
@@ -173,6 +187,15 @@ export function SendForm() {
         setResult(null);
     };
 
+    const handleManualRefresh = async () => {
+        setIsRefreshing(true);
+        try {
+            await refreshBalances();
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
     // Show loading while checking trustline status
     if (isRefreshing) {
         return (
@@ -196,9 +219,18 @@ export function SendForm() {
                     <p className="text-slate-500 mb-4">
                         You need to enable RLUSD on your wallet before you can send payments.
                     </p>
-                    <Link href="/dashboard">
-                        <Button>Go to Dashboard</Button>
-                    </Link>
+                    <div className="flex gap-3 justify-center">
+                        <Link href="/dashboard">
+                            <Button>Go to Dashboard</Button>
+                        </Link>
+                        <Button variant="outline" onClick={handleManualRefresh}>
+                            <Loader2 className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                            Refresh Status
+                        </Button>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-4">
+                        Already enabled RLUSD? Click &quot;Refresh Status&quot; to update.
+                    </p>
                 </CardContent>
             </Card>
         );

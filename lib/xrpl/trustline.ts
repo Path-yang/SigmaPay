@@ -69,21 +69,59 @@ export async function checkTrustlineExists(address: string): Promise<boolean> {
   try {
     const client = await getClient();
 
+    // First try with peer filter
     const response = await client.request({
       command: "account_lines",
       account: address,
       peer: RLUSD_ISSUER,
     });
 
+    console.log("Trustline check for", address);
+    console.log("Looking for issuer:", RLUSD_ISSUER);
+    console.log("Looking for currency:", RLUSD_CURRENCY);
+    console.log("Found lines:", JSON.stringify(response.result.lines, null, 2));
+
     interface TrustLine {
       currency: string;
+      account: string;
     }
 
     // Check for both hex and readable currency formats
-    return response.result.lines.some(
-      (line: TrustLine) => line.currency === RLUSD_CURRENCY || line.currency === "RLUSD"
+    const found = response.result.lines.some(
+      (line: TrustLine) => {
+        const currencyMatch = line.currency === RLUSD_CURRENCY || line.currency === "RLUSD";
+        console.log("Line:", line.currency, "matches:", currencyMatch);
+        return currencyMatch;
+      }
     );
-  } catch {
+
+    if (found) {
+      console.log("Trustline found!");
+      return true;
+    }
+
+    // If not found with peer filter, check all lines
+    const allLines = await client.request({
+      command: "account_lines",
+      account: address,
+    });
+
+    console.log("All trustlines:", JSON.stringify(allLines.result.lines, null, 2));
+
+    // Check if any line matches our currency
+    const foundInAll = allLines.result.lines.some(
+      (line: TrustLine) => {
+        const currencyMatch = line.currency === RLUSD_CURRENCY || line.currency === "RLUSD";
+        if (currencyMatch) {
+          console.log("Found RLUSD trustline to issuer:", line.account);
+        }
+        return currencyMatch;
+      }
+    );
+
+    return foundInAll;
+  } catch (error) {
+    console.error("Error checking trustline:", error);
     return false;
   }
 }
