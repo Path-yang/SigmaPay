@@ -21,10 +21,12 @@ import {
     Shield,
     Zap,
     DollarSign,
-    AlertTriangle
+    AlertTriangle,
+    Link2
 } from "lucide-react";
+import { isCrossmarkInstalled, connectCrossmark } from "@/lib/xrpl/crossmark";
 
-type Step = "welcome" | "choice" | "create" | "import" | "seed" | "fund" | "trustline" | "did" | "complete";
+type Step = "welcome" | "choice" | "create" | "import" | "crossmark" | "seed" | "fund" | "trustline" | "did" | "complete";
 
 export default function OnboardingPage() {
     const router = useRouter();
@@ -52,6 +54,20 @@ export default function OnboardingPage() {
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [fundingError, setFundingError] = useState<string | null>(null);
+    const [crossmarkInstalled, setCrossmarkInstalled] = useState(false);
+    const [crossmarkAddress, setCrossmarkAddress] = useState<string | null>(null);
+
+    // Check if Crossmark is installed
+    useEffect(() => {
+        // Need to check on client side after mount
+        const checkCrossmark = () => {
+            setCrossmarkInstalled(isCrossmarkInstalled());
+        };
+        // Check immediately and after a short delay (extension might load late)
+        checkCrossmark();
+        const timer = setTimeout(checkCrossmark, 1000);
+        return () => clearTimeout(timer);
+    }, []);
 
     // Refresh balances when entering fund or trustline steps
     useEffect(() => {
@@ -99,6 +115,46 @@ export default function OnboardingPage() {
             toast({ title: "Wallet imported!", variant: "success" });
         } catch (error) {
             toast({ title: "Invalid seed phrase", description: String(error), variant: "destructive" });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleConnectCrossmark = async () => {
+        if (!crossmarkInstalled) {
+            window.open("https://crossmark.io", "_blank");
+            toast({ 
+                title: "Install Crossmark", 
+                description: "Please install the Crossmark browser extension and refresh", 
+                variant: "destructive" 
+            });
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const result = await connectCrossmark();
+            if (result.success && result.address) {
+                setCrossmarkAddress(result.address);
+                setStep("crossmark");
+                toast({ 
+                    title: "Connected to Crossmark!", 
+                    description: `Address: ${result.address.slice(0, 8)}...${result.address.slice(-6)}`,
+                    variant: "success" 
+                });
+            } else {
+                toast({ 
+                    title: "Connection failed", 
+                    description: result.error || "Could not connect to Crossmark", 
+                    variant: "destructive" 
+                });
+            }
+        } catch (error) {
+            toast({ 
+                title: "Connection failed", 
+                description: String(error), 
+                variant: "destructive" 
+            });
         } finally {
             setLoading(false);
         }
@@ -249,9 +305,43 @@ export default function OnboardingPage() {
                     <Card className="animate-fade-in">
                         <CardHeader>
                             <CardTitle>Setup Wallet</CardTitle>
-                            <CardDescription>Create a new wallet or import existing</CardDescription>
+                            <CardDescription>Create a new wallet, import existing, or connect Crossmark</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3">
+                            {/* Crossmark Connect - Featured option */}
+                            <button
+                                onClick={handleConnectCrossmark}
+                                disabled={loading}
+                                className="w-full p-4 rounded-xl border-2 border-emerald-300 bg-emerald-50/50 hover:border-emerald-400 hover:bg-emerald-100/50 transition-all text-left"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                                        <Link2 className="w-5 h-5 text-emerald-600" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-semibold">Connect Crossmark</p>
+                                            <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full">Recommended</span>
+                                        </div>
+                                        <p className="text-sm text-slate-500">
+                                            {crossmarkInstalled 
+                                                ? "Use your Crossmark browser extension" 
+                                                : "Install Crossmark extension first"}
+                                        </p>
+                                    </div>
+                                    {loading && <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />}
+                                </div>
+                            </button>
+
+                            <div className="relative my-4">
+                                <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-slate-200"></div>
+                                </div>
+                                <div className="relative flex justify-center text-xs uppercase">
+                                    <span className="bg-white px-2 text-slate-500">or</span>
+                                </div>
+                            </div>
+
                             <button
                                 onClick={() => setStep("create")}
                                 className="w-full p-4 rounded-xl border-2 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition-all text-left"
@@ -281,6 +371,60 @@ export default function OnboardingPage() {
                                 </div>
                             </button>
                             <Button variant="ghost" className="w-full" onClick={() => setStep("welcome")}>
+                                <ArrowLeft className="w-4 h-4 mr-2" />
+                                Back
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Crossmark Connected */}
+                {step === "crossmark" && (
+                    <Card className="animate-fade-in">
+                        <CardHeader className="text-center">
+                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center mx-auto mb-4">
+                                <Check className="w-10 h-10 text-white" />
+                            </div>
+                            <CardTitle>Crossmark Connected!</CardTitle>
+                            <CardDescription>Your wallet is ready to use</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                                <p className="text-xs text-slate-500 mb-1">Connected Address</p>
+                                <p className="font-mono text-sm text-slate-700 break-all">{crossmarkAddress}</p>
+                            </div>
+
+                            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                                <p className="text-sm text-blue-800">
+                                    <strong>Note:</strong> Crossmark will prompt you to sign each transaction. 
+                                    This keeps your keys secure in the extension.
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <p className="text-sm font-medium text-slate-700">Next steps:</p>
+                                <ul className="text-sm text-slate-600 space-y-1">
+                                    <li className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs">1</div>
+                                        Get test RLUSD from <a href="https://tryrlusd.com" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline">tryrlusd.com</a>
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs">2</div>
+                                        Enable RLUSD trustline in Crossmark
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs">3</div>
+                                        Start sending payments!
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <Button className="w-full" size="lg" onClick={() => router.push("/dashboard")}>
+                                Go to Dashboard
+                                <ArrowRight className="w-4 h-4 ml-2" />
+                            </Button>
+
+                            <Button variant="ghost" className="w-full" onClick={() => setStep("choice")}>
                                 <ArrowLeft className="w-4 h-4 mr-2" />
                                 Back
                             </Button>
