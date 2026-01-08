@@ -6,6 +6,7 @@ import { useWallet } from "@/components/wallet/WalletProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
 import { 
@@ -487,16 +488,20 @@ export default function OnboardingPage() {
                     <Card className="animate-fade-in">
                         <CardHeader>
                             <CardTitle>Import Wallet</CardTitle>
-                            <CardDescription>Enter your seed phrase and create a password</CardDescription>
+                            <CardDescription>Enter your secret key or mnemonic phrase</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="space-y-2">
-                                <Label>Seed Phrase</Label>
-                                <Input
+                                <Label>Secret Key or Mnemonic</Label>
+                                <Textarea
                                     value={importSeed}
                                     onChange={(e) => setImportSeed(e.target.value)}
-                                    placeholder="sXXXXXXXXXXXXXXXXXX..."
+                                    placeholder="Enter secret key (sXXXX...) or 12/24 word mnemonic phrase"
+                                    className="min-h-[80px] font-mono text-sm"
                                 />
+                                <p className="text-xs text-slate-500">
+                                    Supports: Secret keys (start with &apos;s&apos;) or mnemonic phrases (12-24 words from Crossmark, etc.)
+                                </p>
                             </div>
                             <div className="space-y-2">
                                 <Label>New Password</Label>
