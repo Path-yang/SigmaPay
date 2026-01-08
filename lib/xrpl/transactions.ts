@@ -95,16 +95,23 @@ export async function getTransactionHistory(address: string): Promise<Transactio
                     amountValue = (parseInt(amount) / 1000000).toString();
                 }
 
-                // Only the creator (Account) will see this in their history
-                transactions.push({
-                    hash: txObj.hash || "",
-                    type: "escrow_created",
-                    amount: amountValue,
-                    currency: "XRP",
-                    counterparty: txObj.Destination || "",
-                    timestamp: txObj.date ? (txObj.date + 946684800) * 1000 : Date.now(),
-                    success: txResult === "tesSUCCESS",
-                });
+                // Check if current user is the creator or the recipient
+                const isCreator = txObj.Account === address;
+                
+                // Only show "escrow_created" for the creator (sender)
+                // Recipients will see it when they claim (EscrowFinish)
+                if (isCreator) {
+                    transactions.push({
+                        hash: txObj.hash || "",
+                        type: "escrow_created",
+                        amount: amountValue,
+                        currency: "XRP",
+                        counterparty: txObj.Destination || "",
+                        timestamp: txObj.date ? (txObj.date + 946684800) * 1000 : Date.now(),
+                        success: txResult === "tesSUCCESS",
+                    });
+                }
+                // Skip for recipients - they'll see the escrow in their escrow list
             }
             // Handle EscrowFinish transactions
             else if (txObj.TransactionType === "EscrowFinish") {
@@ -118,7 +125,7 @@ export async function getTransactionHistory(address: string): Promise<Transactio
                             if ("DeletedNode" in node) {
                                 const deletedNode = node.DeletedNode as { 
                                     LedgerEntryType?: string; 
-                                    FinalFields?: { Amount?: string } 
+                                    FinalFields?: { Amount?: string; Destination?: string } 
                                 };
                                 if (deletedNode.LedgerEntryType === "Escrow" && deletedNode.FinalFields?.Amount) {
                                     amountValue = (parseInt(deletedNode.FinalFields.Amount) / 1000000).toString();
@@ -130,24 +137,12 @@ export async function getTransactionHistory(address: string): Promise<Transactio
                 }
 
                 // Owner is who created the escrow (sender of funds)
-                // Account is who submitted the finish transaction (usually the recipient)
+                // Account is who submitted the finish transaction
+                // Destination (from escrow object) is who receives the funds
                 const isOwner = txObj.Owner === address;
-
-                transactions.push({
-                    hash: txObj.hash || "",
-                    type: "escrow_finished",
-                    amount: amountValue,
-                    currency: "XRP",
-                    // If I'm the owner, show who claimed it; otherwise show who sent it
-                    counterparty: isOwner ? (txObj.Account || "") : (txObj.Owner || ""),
-                    timestamp: txObj.date ? (txObj.date + 946684800) * 1000 : Date.now(),
-                    success: txResult === "tesSUCCESS",
-                });
-            }
-            // Handle EscrowCancel transactions
-            else if (txObj.TransactionType === "EscrowCancel") {
-                // Try to get amount from AffectedNodes in meta (deleted escrow)
-                let amountValue = "0";
+                
+                // Get the destination from the deleted escrow node
+                let escrowDestination = "";
                 if (typeof meta === "object" && meta !== null && "AffectedNodes" in meta) {
                     const affectedNodes = (meta as unknown as { AffectedNodes?: Array<Record<string, unknown>> }).AffectedNodes;
                     if (affectedNodes) {
@@ -155,29 +150,71 @@ export async function getTransactionHistory(address: string): Promise<Transactio
                             if ("DeletedNode" in node) {
                                 const deletedNode = node.DeletedNode as { 
                                     LedgerEntryType?: string; 
-                                    FinalFields?: { Amount?: string } 
+                                    FinalFields?: { Destination?: string } 
                                 };
-                                if (deletedNode.LedgerEntryType === "Escrow" && deletedNode.FinalFields?.Amount) {
-                                    amountValue = (parseInt(deletedNode.FinalFields.Amount) / 1000000).toString();
+                                if (deletedNode.LedgerEntryType === "Escrow" && deletedNode.FinalFields?.Destination) {
+                                    escrowDestination = deletedNode.FinalFields.Destination;
                                     break;
                                 }
                             }
                         }
                     }
                 }
+                
+                const isRecipient = escrowDestination === address;
 
-                // Owner is who created (and gets funds back on cancel)
+                // Only show for the recipient (who received funds)
+                // Owner already saw "escrow_created" when they sent it - no need to duplicate
+                if (isRecipient) {
+                    transactions.push({
+                        hash: txObj.hash || "",
+                        type: "escrow_finished",
+                        amount: amountValue,
+                        currency: "XRP",
+                        counterparty: txObj.Owner || "",
+                        timestamp: txObj.date ? (txObj.date + 946684800) * 1000 : Date.now(),
+                        success: txResult === "tesSUCCESS",
+                    });
+                }
+                // Skip for owner - they already saw "escrow_created"
+            }
+            // Handle EscrowCancel transactions
+            else if (txObj.TransactionType === "EscrowCancel") {
+                // Only show for the owner (who gets funds back)
                 const isOwner = txObj.Owner === address;
+                
+                if (isOwner) {
+                    // Try to get amount from AffectedNodes in meta (deleted escrow)
+                    let amountValue = "0";
+                    if (typeof meta === "object" && meta !== null && "AffectedNodes" in meta) {
+                        const affectedNodes = (meta as unknown as { AffectedNodes?: Array<Record<string, unknown>> }).AffectedNodes;
+                        if (affectedNodes) {
+                            for (const node of affectedNodes) {
+                                if ("DeletedNode" in node) {
+                                    const deletedNode = node.DeletedNode as { 
+                                        LedgerEntryType?: string; 
+                                        FinalFields?: { Amount?: string; Destination?: string } 
+                                    };
+                                    if (deletedNode.LedgerEntryType === "Escrow" && deletedNode.FinalFields?.Amount) {
+                                        amountValue = (parseInt(deletedNode.FinalFields.Amount) / 1000000).toString();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
 
-                transactions.push({
-                    hash: txObj.hash || "",
-                    type: "escrow_cancelled",
-                    amount: amountValue,
-                    currency: "XRP",
-                    counterparty: isOwner ? (txObj.Account || "") : (txObj.Owner || ""),
-                    timestamp: txObj.date ? (txObj.date + 946684800) * 1000 : Date.now(),
-                    success: txResult === "tesSUCCESS",
-                });
+                    transactions.push({
+                        hash: txObj.hash || "",
+                        type: "escrow_cancelled",
+                        amount: amountValue,
+                        currency: "XRP",
+                        counterparty: "Self",
+                        timestamp: txObj.date ? (txObj.date + 946684800) * 1000 : Date.now(),
+                        success: txResult === "tesSUCCESS",
+                    });
+                }
+                // Skip for non-owners - they don't need to see cancelled escrows they didn't create
             }
         }
 
