@@ -84,14 +84,16 @@ export default function VerifyPage() {
             } else {
                 toast({ 
                     title: "Verification Failed", 
-                    description: "Make sure your wallet is funded with XRP. Check console for details.",
+                    description: "The XRPL testnet may be slow. Please wait a moment and try again.",
                     variant: "destructive" 
                 });
             }
         } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : "An unexpected error occurred";
+            const isTimeout = errorMsg.includes("timed out") || errorMsg.includes("timeout");
             toast({ 
-                title: "Verification Error", 
-                description: error instanceof Error ? error.message : "An unexpected error occurred",
+                title: isTimeout ? "Network Timeout" : "Verification Error", 
+                description: isTimeout ? "The testnet is slow. Please try again in a few moments." : errorMsg,
                 variant: "destructive" 
             });
             console.error("Verification error:", error);
@@ -118,14 +120,16 @@ export default function VerifyPage() {
             } else {
                 toast({ 
                     title: "Verification Failed", 
-                    description: "Make sure your wallet is funded with XRP. Check console for details.",
+                    description: "The XRPL testnet may be slow. Please wait a moment and try again.",
                     variant: "destructive" 
                 });
             }
         } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : "An unexpected error occurred";
+            const isTimeout = errorMsg.includes("timed out") || errorMsg.includes("timeout");
             toast({ 
-                title: "Verification Error", 
-                description: error instanceof Error ? error.message : "An unexpected error occurred",
+                title: isTimeout ? "Network Timeout" : "Verification Error", 
+                description: isTimeout ? "The testnet is slow. Please try again in a few moments." : errorMsg,
                 variant: "destructive" 
             });
             console.error("Verification error:", error);

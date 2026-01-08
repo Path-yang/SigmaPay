@@ -1,5 +1,6 @@
 // XRPL Network Configuration
-export const XRPL_TESTNET_URL = "wss://s.altnet.rippletest.net:51233";
+// Using xrpl-labs testnet which may be faster than the default
+export const XRPL_TESTNET_URL = "wss://testnet.xrpl-labs.com";
 export const XRPL_TESTNET_FAUCET = "https://faucet.altnet.rippletest.net/accounts";
 
 // RLUSD on Testnet
